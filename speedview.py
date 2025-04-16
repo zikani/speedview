@@ -8,7 +8,7 @@ import psutil
 import socket
 import platform
 import subprocess
-import re  # For using regular expressions to update SVG
+import re  
 import speedtest
 import sys
 import os
