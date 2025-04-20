@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QDialog, QFormLayout, QLineEdit, QCheckBox, QComboBox, 
                             QDialogButtonBox, QMessageBox, QGroupBox, QVBoxLayout, 
-                            QSpinBox, QDoubleSpinBox, QLabel, QMenuBar, QMenu, QAction)
+                            QSpinBox, QDoubleSpinBox, QLabel, QMenuBar, QMenu, QAction, QPushButton, QHBoxLayout)
 from PyQt5.QtCore import Qt
 import psutil
 
@@ -123,12 +123,27 @@ Licensed under MIT""")
         group = QGroupBox("Monitoring Settings")
         layout = QFormLayout()
         
-        # Network Interface Selection
+        # Network Interface Selection with refresh button and auto-select checkbox
+        interface_layout = QVBoxLayout()
+        
+        # Interface selection row
+        interface_select_layout = QHBoxLayout()
         self.network_interface_combo = QComboBox()
-        interfaces = self.get_network_interfaces()
-        self.network_interface_combo.addItems(interfaces)
-        self.network_interface_combo.setToolTip("Select which network interface to monitor")
-        layout.addRow("Network Interface:", self.network_interface_combo)
+        self.refresh_interfaces_button = QPushButton("Refresh")
+        self.refresh_interfaces_button.clicked.connect(self.refresh_interfaces)
+        interface_select_layout.addWidget(self.network_interface_combo)
+        interface_select_layout.addWidget(self.refresh_interfaces_button)
+        interface_layout.addLayout(interface_select_layout)
+        
+        # Auto-select checkbox row
+        auto_select_layout = QHBoxLayout()
+        self.auto_select_checkbox = QCheckBox("Auto-select best interface")
+        self.auto_select_checkbox.setToolTip("Automatically switch to the best available network interface")
+        auto_select_layout.addWidget(self.auto_select_checkbox)
+        interface_layout.addLayout(auto_select_layout)
+        
+        self.refresh_interfaces()  # Load initial interfaces
+        layout.addRow("Network Interface:", interface_layout)
         
         # Max Speed
         self.max_speed_input = QSpinBox()
@@ -154,6 +169,41 @@ Licensed under MIT""")
         
         group.setLayout(layout)
         self.layout.addWidget(group)
+
+    def refresh_interfaces(self):
+        """Refresh the list of network interfaces"""
+        try:
+            self.network_interface_combo.clear()
+            interfaces = []
+            stats = psutil.net_if_stats()
+            
+            # First add physical interfaces that are active
+            for interface, stat in stats.items():
+                if stat.isup and not any(x in interface.lower() for x in ['vethernet', 'vmware', 'virtual']):
+                    speed = f"{stat.speed}Mbps" if stat.speed else "Unknown speed"
+                    self.network_interface_combo.addItem(f"{interface} (Active - {speed})", interface)
+                    interfaces.append(interface)
+            
+            # Then add virtual interfaces that are active
+            for interface, stat in stats.items():
+                if stat.isup and any(x in interface.lower() for x in ['vethernet', 'vmware', 'virtual']):
+                    self.network_interface_combo.addItem(f"{interface} (Virtual - Active)", interface)
+                    interfaces.append(interface)
+            
+            # Finally add inactive interfaces
+            for interface, stat in stats.items():
+                if not stat.isup:
+                    self.network_interface_combo.addItem(f"{interface} (Inactive)", interface)
+            
+            # Restore selected interface if it exists
+            if self.settings.selected_interface in interfaces:
+                index = self.network_interface_combo.findData(self.settings.selected_interface)
+                if index >= 0:
+                    self.network_interface_combo.setCurrentIndex(index)
+            
+        except Exception as e:
+            print(f"Error refreshing interfaces: {e}")
+            self.network_interface_combo.addItem("No interfaces found")
 
     def create_behavior_group(self):
         """Create application behavior group."""
@@ -225,10 +275,14 @@ Licensed under MIT""")
     def get_network_interfaces(self):
         """Get list of available network interfaces."""
         interfaces = []
-        for interface, addrs in psutil.net_if_addrs().items():
-            # Skip loopback and non-active interfaces
-            if interface != 'lo' and any(addr.address for addr in addrs):
-                interfaces.append(interface)
+        try:
+            stats = psutil.net_if_stats()
+            for interface, stat in stats.items():
+                if stat.isup:  # Only include active interfaces
+                    interfaces.append(interface)
+        except Exception as e:
+            print(f"Error getting network interfaces: {e}")
+        
         return interfaces or ["No interfaces found"]
 
     def load_settings(self):
@@ -252,23 +306,26 @@ Licensed under MIT""")
     def validate_and_accept(self):
         """Enhanced settings validation"""
         try:
-            # Validate network interface
-            interface = self.network_interface_combo.currentText()
-            if interface != "No interfaces found":
-                if not self._validate_interface(interface):
-                    raise ValueError(f"Network interface '{interface}' is not active")
-
-            # Validate speed values
-            max_speed = self.max_speed_input.value()
-            max_upload = self.max_upload_input.value()
-            if max_speed <= 0 or max_upload <= 0:
-                raise ValueError("Speed values must be greater than 0")
-
-            # Validate update interval
-            interval = self.update_interval_input.value()
-            if interval < 0.1 or interval > 60.0:
-                raise ValueError("Update interval must be between 0.1 and 60 seconds")
-
+            # Get the selected interface
+            current_index = self.network_interface_combo.currentIndex()
+            interface = self.network_interface_combo.itemData(current_index)
+            
+            if interface == "No interfaces found":
+                raise ValueError("No valid network interface available")
+            
+            # Validate network interface is active
+            stats = psutil.net_if_stats()
+            if interface not in stats or not stats[interface].isup:
+                reply = QMessageBox.question(
+                    self,
+                    "Interface Warning",
+                    f"The selected interface '{interface}' appears to be inactive. "
+                    "Would you like to select it anyway?",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                if reply == QMessageBox.No:
+                    return
+            
             # Update settings
             self._update_settings()
             
@@ -277,15 +334,13 @@ Licensed under MIT""")
                 self.settings.save()
             except Exception as e:
                 raise ValueError(f"Failed to save settings: {str(e)}")
-
+            
             super().accept()
-
+            
         except ValueError as e:
             QMessageBox.critical(self, "Validation Error", str(e))
-            return False
         except Exception as e:
             QMessageBox.critical(self, "Settings Error", f"An unexpected error occurred:\n{str(e)}")
-            return False
 
     def _validate_interface(self, interface):
         """Validate network interface"""
@@ -297,6 +352,17 @@ Licensed under MIT""")
 
     def _update_settings(self):
         """Update settings from UI values"""
+        # Get the selected interface from the combo box data
+        current_index = self.network_interface_combo.currentIndex()
+        selected_interface = self.network_interface_combo.itemData(current_index)
+        
+        # Only update interface if auto-select is disabled
+        if not self.auto_select_checkbox.isChecked():
+            self.settings.selected_interface = selected_interface
+        
+        # Store auto-select preference
+        self.settings.auto_select_interface = self.auto_select_checkbox.isChecked()
+        
         self.settings.max_speed = self.max_speed_input.value()
         self.settings.max_upload = self.max_upload_input.value()
         self.settings.update_interval = self.update_interval_input.value()
@@ -305,7 +371,6 @@ Licensed under MIT""")
         self.settings.close_to_tray = self.close_to_tray_checkbox.isChecked()
         self.settings.show_upload_speed = self.show_upload_speed_checkbox.isChecked()
         self.settings.speed_unit = self.speed_unit_combo.currentText()
-        self.settings.selected_interface = self.network_interface_combo.currentText()
         self.settings.enable_notifications = self.enable_notifications_checkbox.isChecked()
         self.settings.notification_threshold = self.notification_threshold.value()
 
