@@ -1,0 +1,45 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.egg-info/
+dist/
+build/
+
+# PyQt5 specific files
+*.pyc
+*.pyo
+*.pyd
+*.so
+
+# IDE specific files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+Thumbs.db
+*.log
+
+# Backup files
+*~
+*.bak
+*.tmp
+
+# Configuration files
+*.env
+*.ini
+*.json
+
+# Other files
+*.swp
+*.swo
