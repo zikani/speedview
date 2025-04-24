@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QShortcut
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QShortcut, QApplication
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt, QByteArray
 from PyQt5.QtGui import QKeySequence
