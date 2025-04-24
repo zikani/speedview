@@ -1,11 +1,12 @@
 import sys
+import logging
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QMessageBox, QShortcut, 
                              QApplication, QAction)
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt, QTimer, QPoint
 from PyQt5.QtGui import QKeySequence, QMouseEvent, QIcon
 
-from network_speed_meter.speedview.ui.resources.svg_templates import MAIN_SVG_TEMPLATE
+from speedview.ui.resources.svg_templates import MAIN_SVG_TEMPLATE, HISTORY_ICON_SVG
 from speedview.ui.settings_dialog import SettingsDialog
 from speedview.ui.system_tray import SystemTray
 from speedview.ui.floating_window import FloatingWindow
@@ -45,6 +46,7 @@ class MainWindow(QWidget):
 
     def setup_ui(self):
         """Initialize the user interface"""
+        logging.info("Starting setup_ui in MainWindow...")
         self.setWindowTitle("SpeedView - Network Monitor")
         self.setWindowIcon(QIcon(":/icons/app_icon"))
         
@@ -56,21 +58,25 @@ class MainWindow(QWidget):
         # SVG display
         self.svg_widget = QSvgWidget()
         self.layout.addWidget(self.svg_widget)
+        # Connect SVG click
+        self.svg_widget.mousePressEvent = self.handle_svg_click
         
-        # Window properties
-        self.setMinimumSize(500, 500)
-        self.resize(self.settings.window_size)
-        self.move(self.settings.window_position)
+        # Window properties (fixed size to match SVG)
+        self.setFixedSize(500, 500)
+        # Optionally, center or move the window if desired
+        # self.move(self.settings.window_position)
         
         # Load initial SVG
         self.current_svg_template = MAIN_SVG_TEMPLATE
         self.update_display()
+        logging.info("Finished setup_ui in MainWindow.")
 
         # Add Help menu
-        help_menu = self.menuBar().addMenu("Help")
-        check_updates_action = QAction("Check for Updates", self)
-        check_updates_action.triggered.connect(self.check_for_updates)
-        help_menu.addAction(check_updates_action)
+        if hasattr(self, 'menuBar') and callable(getattr(self, 'menuBar', None)):
+            help_menu = self.menuBar().addMenu("Help")
+            check_updates_action = QAction("Check for Updates", self)
+            check_updates_action.triggered.connect(self.check_for_updates)
+            help_menu.addAction(check_updates_action)
 
     def setup_connections(self):
         """Connect signals and slots"""
@@ -84,6 +90,7 @@ class MainWindow(QWidget):
         QShortcut(QKeySequence("Ctrl+S"), self, self.open_settings)
         QShortcut(QKeySequence("Ctrl+T"), self, self.test_network)
         QShortcut(QKeySequence("Ctrl+F"), self, self.toggle_float_mode)
+        QShortcut(QKeySequence("Ctrl+H"), self, self.show_history)
         QShortcut(QKeySequence("Esc"), self, self.hide_if_floating)
 
     def init_system_tray(self):
@@ -94,6 +101,7 @@ class MainWindow(QWidget):
 
     def update_display(self):
         """Update all display elements"""
+        logging.info("Starting update_display in MainWindow...")
         download_speed, upload_speed = self.speed_controller.get_current_speeds()
         self.last_speeds = (download_speed, upload_speed)
         
@@ -119,7 +127,9 @@ class MainWindow(QWidget):
         svg_content = update_svg_signal_strength(svg_content, strength)
         
         # Load updated SVG
+        logging.info("Loading SVG into main window SVG widget...")
         self.svg_widget.load(svg_content.encode('utf-8'))
+        logging.info("SVG loaded successfully in main window.")
         
         # Update tray icon if available
         if hasattr(self, 'tray') and self.tray:
@@ -160,20 +170,36 @@ class MainWindow(QWidget):
         self.svg_widget.load(svg_content.encode('utf-8'))
 
     def handle_svg_click(self, event: QMouseEvent):
-        """Handle clicks on the SVG widget"""
+        """Handle clicks on the SVG widget, mapping widget coordinates to SVG coordinates for button detection."""
         pos = event.pos()
-        
+        widget_width = self.svg_widget.width()
+        widget_height = self.svg_widget.height()
+        svg_width, svg_height = 500, 500  # SVG viewBox size
+        scale_x = svg_width / widget_width
+        scale_y = svg_height / widget_height
+        svg_x = pos.x() * scale_x
+        svg_y = pos.y() * scale_y
+        logging.info(f"SVG clicked at widget ({pos.x()}, {pos.y()}) mapped to SVG ({svg_x:.1f}, {svg_y:.1f})")
+
         # Test Network Button (175,400 to 325,440)
-        if 175 <= pos.x() <= 325 and 400 <= pos.y() <= 440:
+        if 175 <= svg_x <= 325 and 400 <= svg_y <= 440:
+            logging.info("Test Network button clicked")
             self.test_network()
-        
-        # Settings Icon (420,80 with 15px radius)
-        elif ((pos.x()-420)**2 + (pos.y()-80)**2) <= 225:  # 15^2
+        # Settings Icon (center at 450,80 with 20px radius)
+        elif ((svg_x-450)**2 + (svg_y-80)**2) <= 400:  # 20^2
+            logging.info("Settings icon clicked")
             self.open_settings()
-        
         # Float Button (50,400 to 150,440)
-        elif 50 <= pos.x() <= 150 and 400 <= pos.y() <= 440:
+        elif 50 <= svg_x <= 150 and 400 <= svg_y <= 440:
+            logging.info("Float button clicked")
             self.toggle_float_mode()
+        # History Button (350,400 to 450,440)
+        elif 350 <= svg_x <= 450 and 400 <= svg_y <= 440:
+            logging.info("History button clicked")
+            self.show_history()
+        else:
+            logging.info("SVG click did not match any button region")
+        event.accept()
 
     def open_settings(self):
         """Open settings dialog"""
@@ -254,6 +280,17 @@ class MainWindow(QWidget):
         """Check for software updates"""
         update_dialog = UpdateDialog(self)
         update_dialog.exec_()
+        
+    def show_history(self):
+        """Show speed test history"""
+        logging.info("Showing speed test history")
+        # This is a placeholder for the history feature
+        # In the future, this will show a dialog with historical speed test data
+        QMessageBox.information(
+            self,
+            "Speed Test History",
+            "Speed test history feature will be implemented in a future update."
+        )
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

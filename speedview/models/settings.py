@@ -54,6 +54,10 @@ class Settings:
         # Window state
         self.window_size = None
         self.window_position = None
+
+        # Update URL setting
+        from speedview.config.config import DEFAULT_UPDATE_URL
+        self.update_url = DEFAULT_UPDATE_URL
         
         # Load saved settings if available
         self.load()
@@ -83,6 +87,10 @@ class Settings:
                     for key, value in data.items():
                         if hasattr(self, key):
                             setattr(self, key, value)
+                    # Backward compatibility: if update_url missing, use default
+                    if not hasattr(self, 'update_url') or not self.update_url:
+                        from speedview.config.config import DEFAULT_UPDATE_URL
+                        self.update_url = DEFAULT_UPDATE_URL
         except Exception as e:
             print(f"Error loading settings: {e}")
 
@@ -105,7 +113,8 @@ class Settings:
                 'notification_threshold': self.notification_threshold,
                 'window_size': self.window_size,
                 'window_position': self.window_position,
-                'settings_version': self.settings_version
+                'settings_version': self.settings_version,
+                'update_url': self.update_url
             }
             
             # Ensure the directory exists

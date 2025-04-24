@@ -1,4 +1,4 @@
-# Network Speed Meter
+# SpeedView
 
 A simple application to monitor network speed using PyQt5.
 
@@ -11,8 +11,8 @@ A simple application to monitor network speed using PyQt5.
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/zikani/network_speed_meter.git
-   cd network_speed_meter
+   git clone https://github.com/zikani/speedview.git
+   cd speedview
    ```
 
 2. Install the required dependencies:

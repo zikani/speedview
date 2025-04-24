@@ -1,4 +1,4 @@
-﻿from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QMessageBox,
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QMessageBox,
                               QDialog, QFormLayout, QLabel, QComboBox, QCheckBox,
                               QSystemTrayIcon, QMenu, QAction, QSlider, QPushButton,QLineEdit,QDialogButtonBox)
 from PyQt5.QtSvg import QSvgWidget
@@ -67,9 +67,15 @@ class NetworkSpeedMeter(QWidget):
         if self.settings.is_floating:
             self.toggle_float_mode()
         
+        # Speed update timer
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_speed)
         self.timer.start(int(self.update_interval * 1000))
+        
+        # Network connection check timer (every 5 seconds)
+        self.connection_timer = QTimer()
+        self.connection_timer.timeout.connect(self.network_controller.check_connection_status)
+        self.connection_timer.start(5000)  # Check connection every 5 seconds
 
         self.prev_bytes_received = 0
         self.prev_bytes_sent = 0
@@ -136,24 +142,34 @@ class NetworkSpeedMeter(QWidget):
         """Update connection status display"""
         self.connection_status = status
         self.signal_strength = signal_strength
+        connection_type = self.network_controller.get_connection_info()[0]
         updated_svg = update_svg_connection_status(
             self.svg_code, 
             status=status,
-            signal_strength=signal_strength
+            connection_type=connection_type
         )
         self.load_svg(updated_svg)
 
     def handle_svg_click(self, event):
-        """Handle clicks on SVG elements"""
+        """Handle clicks on SVG elements with proper coordinate mapping"""
         pos = event.pos()
-        # Test Network Button region
-        if 175 <= pos.x() <= 325 and 400 <= pos.y() <= 440:
+        # Map widget coordinates to SVG coordinates (500x500)
+        widget_width = self.svg_widget.width()
+        widget_height = self.svg_widget.height()
+        svg_width, svg_height = 500, 500  # SVG viewBox size
+        scale_x = svg_width / widget_width
+        scale_y = svg_height / widget_height
+        svg_x = pos.x() * scale_x
+        svg_y = pos.y() * scale_y
+        
+        # Test Network Button region (175,400 to 325,440)
+        if 175 <= svg_x <= 325 and 400 <= svg_y <= 440:
             self.test_network()
-        # Settings Icon region
-        elif ((pos.x()-420)**2 + (pos.y()-80)**2) <= 225:
+        # Settings Icon region (center at 450,80 with 20px radius)
+        elif ((svg_x-450)**2 + (svg_y-80)**2) <= 400:  # 20^2
             self.open_settings()
-        # Float Button region
-        elif 50 <= pos.x() <= 150 and 400 <= pos.y() <= 440:
+        # Float Button region (50,400 to 150,440)
+        elif 50 <= svg_x <= 150 and 400 <= svg_y <= 440:
             self.toggle_float_mode()
 
     def apply_settings(self):
@@ -188,12 +204,33 @@ class NetworkSpeedMeter(QWidget):
             self.apply_settings()
 
     def test_network(self):
-        # Start a network speed test
-        QMessageBox.information(self, "Network Test", "Starting network speed test. This may take a moment...")
+        # Start a network speed test with visual dialog
+        from speedview.ui.test_network_dialog import TestNetworkDialog
+        self._test_dialog = TestNetworkDialog(self)
+        self._test_dialog.set_status("Running speed test...")
+        self._test_dialog.show()
+        self._test_dialog.raise_()
+        self._test_dialog.activateWindow()
+        self.network_controller.speed_test_complete.connect(self._on_test_dialog_result)
         self.network_controller.run_speed_test()
 
+    def _on_test_dialog_result(self, download_speed, upload_speed):
+        if not hasattr(self, '_test_dialog') or self._test_dialog is None:
+            return
+        if download_speed == 0 and upload_speed == 0:
+            self._test_dialog.show_failure()
+        else:
+            self.update_speed_display()
+            self._test_dialog.show_results(download_speed, upload_speed)
+        self.network_controller.speed_test_complete.disconnect(self._on_test_dialog_result)
+        # Dialog will be closed by user
+
     def on_speed_test_complete(self, download_speed, upload_speed):
-        # Handle completed speed test
+        # Backward compatibility: call dialog result handler if dialog exists
+        if hasattr(self, '_test_dialog') and self._test_dialog is not None:
+            self._on_test_dialog_result(download_speed, upload_speed)
+            return
+        # Fallback: legacy QMessageBox
         if download_speed == 0 and upload_speed == 0:
             QMessageBox.warning(self, "Test Failed", "Network speed test failed. Please check your connection and try again.")
             return

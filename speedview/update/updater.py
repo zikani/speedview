@@ -11,9 +11,13 @@ from speedview.update.version_checker import VersionChecker
 from ..config.config import APP_VERSION, APP_NAME
 
 class UpdateChecker:
-    def __init__(self):
+    def __init__(self, settings=None):
         self.current_version = APP_VERSION
-        self.github_api_url = "https://api.github.com/repos/yourusername/network-speed-meter/releases/latest"
+        if settings and hasattr(settings, 'update_url'):
+            self.github_api_url = settings.update_url
+        else:
+            from speedview.config.config import DEFAULT_UPDATE_URL
+            self.github_api_url = DEFAULT_UPDATE_URL
         self.update_available = False
         self.latest_version = None
         self.release_notes = None
@@ -22,7 +26,11 @@ class UpdateChecker:
     def check_for_updates(self):
         try:
             response = requests.get(self.github_api_url, timeout=5)
-            response.raise_for_status()  # Raise exception for bad status codes
+            try:
+                response.raise_for_status()  # Raise exception for bad status codes
+            except requests.exceptions.HTTPError as http_err:
+                print(f"Update check HTTP error: {http_err}")
+                return False
             
             data = response.json()
             self.latest_version = data['tag_name'].replace('v', '')

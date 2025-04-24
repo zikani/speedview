@@ -11,6 +11,7 @@ class NetworkController(QObject):
     
     connection_updated = pyqtSignal(str, int)  # status, signal_strength
     speed_test_complete = pyqtSignal(float, float)  # download_speed, upload_speed
+    speed_test_failed = pyqtSignal(str)  # error_message
     
     def __init__(self):
         super().__init__()
@@ -38,15 +39,23 @@ class NetworkController(QObject):
     
     def _check_connection_thread(self):
         """Thread to check connection status to avoid UI freezing"""
+        status = "Disconnected"
+        strength = 0
         try:
             # Check if we can reach Google's DNS
             socket.create_connection(("8.8.8.8", 53), timeout=3)
             status = "Connected"
-        except OSError:
-            status = "Disconnected"
+        except TimeoutError:
+            print("Network check timed out (no internet connection or very slow response).")
+            # Remain as Disconnected, but do not crash
+        except OSError as e:
+            print(f"Network unreachable or error: {e}")
+            # Remain as Disconnected, but do not interrupt app
+        except Exception as e:
+            print(f"Unexpected error during network check: {e}")
+            # Remain as Disconnected
         
         # Get signal strength on a connected network
-        strength = 0
         if status == "Connected":
             strength = self._get_signal_strength()
         
@@ -111,15 +120,36 @@ class NetworkController(QObject):
     def _speed_test_thread(self):
         """Thread to run network speed test"""
         try:
+            import speedtest
             st = speedtest.Speedtest()
             st.get_best_server()
             download_speed = st.download() / 1_000_000  # Convert to Mbps
             upload_speed = st.upload() / 1_000_000      # Convert to Mbps
             self.speed_test_complete.emit(download_speed, upload_speed)
         except Exception as e:
-            print(f"Speed test failed: {e}")
-            self.speed_test_complete.emit(0, 0)
-
+            print(f"Speedtest failed: {e}\nTrying fast.com backend...")
+            # Try fast-cli as fallback
+            try:
+                import subprocess
+                import json
+                # Use 'fast --json' (fast-cli does not support --unit)
+                result = subprocess.run(
+                    ['fast', '--json'],
+                    capture_output=True, text=True, timeout=30
+                )
+                if result.returncode == 0:
+                    data = json.loads(result.stdout)
+                    download_speed = float(data.get('downloadSpeed', 0))
+                    # fast-cli does not provide upload, so set to 0
+                    upload_speed = 0.0
+                    self.speed_test_complete.emit(download_speed, upload_speed)
+                else:
+                    print(f"fast-cli failed: {result.stderr}")
+                    self.speed_test_failed.emit(f"fast-cli failed: {result.stderr}")
+            except Exception as fallback_e:
+                print(f"Both speedtest and fast-cli failed: {fallback_e}")
+                self.speed_test_failed.emit(f"Speedtest failed: {e}; fast-cli failed: {fallback_e}")
+    
     def get_connection_info(self):
         """Get the current connection type and band."""
         if self.connection_status == "Connected":

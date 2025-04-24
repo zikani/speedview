@@ -1,3 +1,4 @@
+import logging
 import psutil
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 import threading
@@ -17,6 +18,7 @@ class SpeedController(QObject):
         self.prev_bytes_sent = 0
         self.last_download_speed = 0
         self.last_upload_speed = 0
+        self.test_in_progress = False  # Prevent concurrent speed tests
         
         # Setup timer for periodic updates
         self.timer = QTimer()
@@ -42,10 +44,9 @@ class SpeedController(QObject):
                 # Calculate speeds in Mbps
                 download_speed = ((bytes_recv - self.prev_bytes_recv) * 8) / (1024 * 1024 * self.settings.update_interval)
                 upload_speed = ((bytes_sent - self.prev_bytes_sent) * 8) / (1024 * 1024 * self.settings.update_interval)
-                
+                logging.info(f"Periodic speed update: download={download_speed:.2f} Mbps, upload={upload_speed:.2f} Mbps")
                 # Emit the signal with updated speeds
                 self.speed_updated.emit(download_speed, upload_speed)
-                
                 # Store for later use
                 self.last_download_speed = download_speed
                 self.last_upload_speed = upload_speed
@@ -53,9 +54,8 @@ class SpeedController(QObject):
             # Store the current byte counts for next calculation
             self.prev_bytes_recv = bytes_recv
             self.prev_bytes_sent = bytes_sent
-            
         except Exception as e:
-            print(f"Error updating speed: {e}")
+            logging.exception(f"Error updating speed: {e}")
     
     def set_update_interval(self, interval):
         """Change the update interval"""
@@ -74,12 +74,17 @@ class SpeedController(QObject):
             for interface in stats:
                 interfaces.append(interface)
         except Exception as e:
-            print(f"Error getting network interfaces: {e}")
+            logging.exception(f"Error getting network interfaces: {e}")
         
         return interfaces
 
     def run_speed_test(self):
         """Start a speed test in a background thread"""
+        if self.test_in_progress:
+            logging.info("Speed test already in progress. Skipping new test.")
+            return
+        self.test_in_progress = True
+        logging.info("Starting speed test thread...")
         thread = threading.Thread(target=self._speed_test_thread)
         thread.daemon = True
         thread.start()
@@ -87,14 +92,18 @@ class SpeedController(QObject):
     def _speed_test_thread(self):
         """Thread to run network speed test"""
         try:
+            logging.info("Running network speed test...")
             st = speedtest.Speedtest()
             st.get_best_server()
             download_speed = st.download() / 1_000_000  # Convert to Mbps
             upload_speed = st.upload() / 1_000_000      # Convert to Mbps
+            logging.info(f"Speed test complete: download={download_speed:.2f} Mbps, upload={upload_speed:.2f} Mbps")
             self.speed_updated.emit(download_speed, upload_speed)
         except Exception as e:
-            print(f"Speed test failed: {e}")
+            logging.exception(f"Speed test failed: {e}")
             self.speed_updated.emit(0, 0)
+        finally:
+            self.test_in_progress = False
 
     def toggle_network_adapter(self, interface_name, enable=True):
         """Enable or disable a network adapter"""

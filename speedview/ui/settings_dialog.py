@@ -158,6 +158,12 @@ Licensed under MIT""")
         self.max_upload_input.setSuffix(" Mbps")
         self.max_upload_input.setToolTip("Maximum expected upload speed for scaling")
         layout.addRow("Max Upload Speed:", self.max_upload_input)
+
+        # Update URL
+        self.update_url_input = QLineEdit()
+        self.update_url_input.setPlaceholderText("Update URL (GitHub API or custom)")
+        self.update_url_input.setToolTip("URL used to check for software updates")
+        layout.addRow("Update URL:", self.update_url_input)
         
         # Update Interval
         self.update_interval_input = QDoubleSpinBox()
@@ -290,18 +296,21 @@ Licensed under MIT""")
         self.max_speed_input.setValue(self.settings.max_speed)
         self.max_upload_input.setValue(self.settings.max_upload)
         self.update_interval_input.setValue(self.settings.update_interval)
+        self.speed_unit_combo.setCurrentText(self.settings.speed_unit)
+        self.auto_select_checkbox.setChecked(self.settings.selected_interface is None)
+        # Set network interface selection
+        if self.settings.selected_interface:
+            idx = self.network_interface_combo.findText(self.settings.selected_interface)
+            if idx >= 0:
+                self.network_interface_combo.setCurrentIndex(idx)
         self.start_minimized_checkbox.setChecked(self.settings.start_minimized)
         self.minimize_to_tray_checkbox.setChecked(self.settings.minimize_to_tray)
         self.close_to_tray_checkbox.setChecked(self.settings.close_to_tray)
         self.show_upload_speed_checkbox.setChecked(self.settings.show_upload_speed)
-        self.speed_unit_combo.setCurrentText(self.settings.speed_unit)
         self.enable_notifications_checkbox.setChecked(self.settings.enable_notifications)
         self.notification_threshold.setValue(self.settings.notification_threshold)
-        
-        # Set network interface
-        index = self.network_interface_combo.findText(self.settings.selected_interface)
-        if index >= 0:
-            self.network_interface_combo.setCurrentIndex(index)
+        # Update URL
+        self.update_url_input.setText(self.settings.update_url)
 
     def validate_and_accept(self):
         """Enhanced settings validation"""
@@ -366,13 +375,32 @@ Licensed under MIT""")
         self.settings.max_speed = self.max_speed_input.value()
         self.settings.max_upload = self.max_upload_input.value()
         self.settings.update_interval = self.update_interval_input.value()
+        self.settings.speed_unit = self.speed_unit_combo.currentText()
         self.settings.start_minimized = self.start_minimized_checkbox.isChecked()
         self.settings.minimize_to_tray = self.minimize_to_tray_checkbox.isChecked()
         self.settings.close_to_tray = self.close_to_tray_checkbox.isChecked()
         self.settings.show_upload_speed = self.show_upload_speed_checkbox.isChecked()
-        self.settings.speed_unit = self.speed_unit_combo.currentText()
         self.settings.enable_notifications = self.enable_notifications_checkbox.isChecked()
         self.settings.notification_threshold = self.notification_threshold.value()
+        # Update URL
+        self.settings.update_url = self.update_url_input.text().strip()
+
+    def save_settings(self):
+        """Save dialog values back to settings object"""
+        self.settings.max_speed = self.max_speed_input.value()
+        self.settings.max_upload = self.max_upload_input.value()
+        self.settings.update_interval = self.update_interval_input.value()
+        self.settings.speed_unit = self.speed_unit_combo.currentText()
+        self.settings.selected_interface = self.network_interface_combo.currentText() if not self.auto_select_checkbox.isChecked() else None
+        self.settings.start_minimized = self.start_minimized_checkbox.isChecked()
+        self.settings.minimize_to_tray = self.minimize_to_tray_checkbox.isChecked()
+        self.settings.close_to_tray = self.close_to_tray_checkbox.isChecked()
+        self.settings.show_upload_speed = self.show_upload_speed_checkbox.isChecked()
+        self.settings.enable_notifications = self.enable_notifications_checkbox.isChecked()
+        self.settings.notification_threshold = self.notification_threshold.value()
+        # Save update URL
+        self.settings.update_url = self.update_url_input.text().strip()
+        self.settings.save()
 
     def restore_defaults(self):
         """Restore default settings."""
