@@ -5,8 +5,49 @@ import shutil
 import socket
 import subprocess
 import threading
+import time
+import requests
 import psutil
 from PyQt5.QtCore import QObject, pyqtSignal
+
+
+class _ChunkedUploadReader:
+    """File-like stream wrapper that generates payload chunks and reports real-time upload speed."""
+
+    def __init__(self, total_bytes, chunk_size=65536, on_progress=None):
+        self.total_bytes = int(total_bytes)
+        self.chunk_size = int(chunk_size)
+        self.bytes_sent = 0
+        self.on_progress = on_progress
+        self._chunk = b"\x55" * self.chunk_size
+        self._start_time = None
+        self._last_report = 0.0
+
+    def __len__(self):
+        return self.total_bytes
+
+    def read(self, size=-1):
+        if self._start_time is None:
+            self._start_time = time.perf_counter()
+        remaining = self.total_bytes - self.bytes_sent
+        if remaining <= 0:
+            return b""
+        to_send = remaining if (size is None or size < 0) else min(size, remaining)
+        if to_send == self.chunk_size:
+            data = self._chunk
+        elif to_send < self.chunk_size:
+            data = self._chunk[:to_send]
+        else:
+            data = b"\x55" * to_send
+        self.bytes_sent += len(data)
+
+        now = time.perf_counter()
+        elapsed = max(1e-6, now - self._start_time)
+        if self.on_progress and (now - self._last_report >= 0.12 or self.bytes_sent == self.total_bytes):
+            self._last_report = now
+            mbps = (self.bytes_sent * 8.0) / (elapsed * 1_000_000.0)
+            self.on_progress(self.bytes_sent, mbps)
+        return data
 
 
 class NetworkController(QObject):
@@ -14,8 +55,19 @@ class NetworkController(QObject):
 
     connection_updated = pyqtSignal(str, int)  # status, signal_strength
     signal_strength_updated = pyqtSignal(int)  # signal_strength (0-100)
+    speed_test_progress = pyqtSignal(str, float, float)  # status, download_mbps, upload_mbps
     speed_test_complete = pyqtSignal(float, float)  # download_speed, upload_speed
     speed_test_failed = pyqtSignal(str)  # error_message
+
+    DEFAULT_DOWNLOAD_URLS = (
+        "https://speed.cloudflare.com/__down?bytes=10000000",
+        "https://proof.ovh.net/files/10Mb.dat",
+        "https://ash-speed.hetzner.com/10MB.bin",
+    )
+    DEFAULT_UPLOAD_URLS = (
+        "https://speed.cloudflare.com/__up",
+        "https://httpbin.org/post",
+    )
 
     def __init__(self, selected_interface=None):
         super().__init__()
@@ -24,6 +76,7 @@ class NetworkController(QObject):
         self.signal_strength = 0
         self.interface_details = {}
         self.updating = False
+        self.testing = False
 
     def set_interface(self, interface_name):
         """Set preferred network interface for status/detail inspection."""
@@ -422,38 +475,150 @@ class NetworkController(QObject):
         details = self.get_interface_details(self.selected_interface, connected=True)
         return details.get("signal_strength", 0)
 
+    def measure_file_speed(
+        self,
+        download_urls=None,
+        upload_urls=None,
+        upload_size_bytes=2 * 1024 * 1024,
+        chunk_size=65536,
+        timeout=12,
+        max_phase_seconds=8.0,
+        progress_callback=None,
+    ):
+        """
+        Fetch data from a remote test file and stream an upload payload to calculate
+        real-time download and upload speeds in Mbps.
+        """
+        dl_candidates = list(download_urls) if download_urls else list(self.DEFAULT_DOWNLOAD_URLS)
+        ul_candidates = list(upload_urls) if upload_urls else list(self.DEFAULT_UPLOAD_URLS)
+
+        download_mbps = 0.0
+        upload_mbps = 0.0
+        last_dl_error = None
+
+        # 1. Real-time streaming test-file download
+        for url in dl_candidates:
+            try:
+                if progress_callback:
+                    progress_callback("Connecting to test file...", 0.0, 0.0)
+                headers = {"User-Agent": "SpeedView/1.0", "Cache-Control": "no-cache"}
+                with requests.get(url, stream=True, timeout=timeout, headers=headers) as resp:
+                    resp.raise_for_status()
+                    start = time.perf_counter()
+                    last_report = start
+                    total_bytes = 0
+                    for chunk in resp.iter_content(chunk_size=chunk_size):
+                        if not chunk:
+                            continue
+                        total_bytes += len(chunk)
+                        now = time.perf_counter()
+                        elapsed = max(1e-6, now - start)
+                        live_dl = (total_bytes * 8.0) / (elapsed * 1_000_000.0)
+                        if progress_callback and (now - last_report >= 0.12):
+                            last_report = now
+                            mb_done = total_bytes / (1024 * 1024)
+                            progress_callback(f"Downloading test file ({mb_done:.1f} MB)...", live_dl, 0.0)
+                        if elapsed >= max_phase_seconds:
+                            break
+                    if total_bytes <= 0:
+                        raise RuntimeError(f"Empty response from {url}")
+                    total_elapsed = max(1e-6, time.perf_counter() - start)
+                    download_mbps = (total_bytes * 8.0) / (total_elapsed * 1_000_000.0)
+                    if progress_callback:
+                        progress_callback("Download complete. Testing upload...", download_mbps, 0.0)
+                    last_dl_error = None
+                    break
+            except Exception as exc:
+                last_dl_error = exc
+
+        if last_dl_error is not None:
+            raise RuntimeError(f"Download test failed: {last_dl_error}")
+
+        # 2. Real-time streaming upload payload
+        last_ul_error = None
+        for url in ul_candidates:
+            try:
+                def _on_ul_progress(sent_bytes, live_ul_mbps):
+                    if progress_callback:
+                        mb_sent = sent_bytes / (1024 * 1024)
+                        progress_callback(f"Uploading test payload ({mb_sent:.1f} MB)...", download_mbps, live_ul_mbps)
+
+                reader = _ChunkedUploadReader(
+                    total_bytes=upload_size_bytes,
+                    chunk_size=chunk_size,
+                    on_progress=_on_ul_progress,
+                )
+                ul_start = time.perf_counter()
+                headers = {"Content-Type": "application/octet-stream", "User-Agent": "SpeedView/1.0"}
+                resp = requests.post(url, data=reader, headers=headers, timeout=timeout)
+                resp.raise_for_status()
+                ul_elapsed = max(1e-6, time.perf_counter() - ul_start)
+                upload_mbps = (reader.bytes_sent * 8.0) / (ul_elapsed * 1_000_000.0)
+                last_ul_error = None
+                break
+            except Exception as exc:
+                last_ul_error = exc
+
+        if last_ul_error is not None and progress_callback:
+            progress_callback("Upload endpoint unreachable", download_mbps, 0.0)
+
+        return download_mbps, upload_mbps
+
     def run_speed_test(self):
         """Start a speed test in a background thread"""
+        if self.testing:
+            return
+        self.testing = True
         thread = threading.Thread(target=self._speed_test_thread, daemon=True)
         thread.start()
 
+    def _emit_test_progress(self, status, download_mbps, upload_mbps):
+        if hasattr(self.speed_test_progress, "emit"):
+            self.speed_test_progress.emit(status, float(download_mbps), float(upload_mbps))
+
     def _speed_test_thread(self):
-        """Thread to run network speed test"""
+        """Thread to run real-time HTTP test-file network speed test with fallbacks."""
         try:
-            import speedtest
-            st = speedtest.Speedtest()
-            st.get_best_server()
-            download_speed = st.download() / 1_000_000
-            upload_speed = st.upload() / 1_000_000
-            self.speed_test_complete.emit(download_speed, upload_speed)
-        except Exception as e:
-            print(f"Speedtest failed: {e}\nTrying fast.com backend...")
+            download_speed, upload_speed = self.measure_file_speed(
+                progress_callback=self._emit_test_progress
+            )
+            if hasattr(self.speed_test_complete, "emit"):
+                self.speed_test_complete.emit(download_speed, upload_speed)
+            return
+        except Exception as file_exc:
             try:
-                import json
-                result = subprocess.run(
-                    ['fast', '--json'],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-                if result.returncode == 0:
-                    data = json.loads(result.stdout)
-                    download_speed = float(data.get('downloadSpeed', 0))
-                    self.speed_test_complete.emit(download_speed, 0.0)
-                else:
-                    self.speed_test_failed.emit(f"fast-cli failed: {result.stderr}")
-            except Exception as fallback_e:
-                self.speed_test_failed.emit(f"Speedtest failed: {e}; fast-cli failed: {fallback_e}")
+                self._emit_test_progress("Trying Speedtest server...", 0.0, 0.0)
+                import speedtest
+                st = speedtest.Speedtest()
+                st.get_best_server()
+                download_speed = st.download() / 1_000_000
+                self._emit_test_progress("Testing upload...", download_speed, 0.0)
+                upload_speed = st.upload() / 1_000_000
+                if hasattr(self.speed_test_complete, "emit"):
+                    self.speed_test_complete.emit(download_speed, upload_speed)
+                return
+            except Exception as st_exc:
+                try:
+                    import json
+                    result = subprocess.run(
+                        ['fast', '--json'],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    if result.returncode == 0:
+                        data = json.loads(result.stdout)
+                        download_speed = float(data.get('downloadSpeed', 0))
+                        if hasattr(self.speed_test_complete, "emit"):
+                            self.speed_test_complete.emit(download_speed, 0.0)
+                        return
+                    err_msg = f"Speed test failed: {file_exc}; {st_exc}; fast-cli: {result.stderr}"
+                except Exception as fallback_e:
+                    err_msg = f"Speed test failed: {file_exc}; {st_exc}; {fallback_e}"
+                if hasattr(self.speed_test_failed, "emit"):
+                    self.speed_test_failed.emit(err_msg)
+        finally:
+            self.testing = False
 
     def get_connection_info(self, interface_name=None, use_cache=False):
         """Get real (connection_type, band_or_detail) for the active/selected interface."""

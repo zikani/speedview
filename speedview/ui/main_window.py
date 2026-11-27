@@ -76,7 +76,7 @@ class MainWindow(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")
         self.setFixedSize(500, 500)
-        apply_rounded_mask(self, 0, 0, 500, 500, radius=15)
+        apply_rounded_mask(self, 0, 0, 500, 500, radius=28)
 
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -328,17 +328,27 @@ class MainWindow(QWidget):
         self._test_dialog.raise_()
         self._test_dialog.activateWindow()
 
+        if hasattr(self.network_controller, 'speed_test_progress'):
+            try:
+                self.network_controller.speed_test_progress.disconnect(self._on_test_dialog_progress)
+            except (TypeError, RuntimeError):
+                pass
+            try:
+                self.network_controller.speed_test_progress.connect(self._on_test_dialog_progress)
+            except RuntimeError:
+                pass
+
         if hasattr(self.network_controller, 'speed_test_complete'):
             try:
                 self.network_controller.speed_test_complete.disconnect(self._on_test_dialog_result)
-            except TypeError:
+            except (TypeError, RuntimeError):
                 pass
             self.network_controller.speed_test_complete.connect(self._on_test_dialog_result)
 
         if hasattr(self.network_controller, 'speed_test_failed'):
             try:
                 self.network_controller.speed_test_failed.disconnect(self._on_test_dialog_failed)
-            except TypeError:
+            except (TypeError, RuntimeError):
                 pass
             self.network_controller.speed_test_failed.connect(self._on_test_dialog_failed)
 
@@ -348,16 +358,25 @@ class MainWindow(QWidget):
             self.speed_controller.run_speed_test()
 
     def _disconnect_test_signals(self):
+        if hasattr(self.network_controller, 'speed_test_progress'):
+            try:
+                self.network_controller.speed_test_progress.disconnect(self._on_test_dialog_progress)
+            except (TypeError, RuntimeError):
+                pass
         if hasattr(self.network_controller, 'speed_test_complete'):
             try:
                 self.network_controller.speed_test_complete.disconnect(self._on_test_dialog_result)
-            except TypeError:
+            except (TypeError, RuntimeError):
                 pass
         if hasattr(self.network_controller, 'speed_test_failed'):
             try:
                 self.network_controller.speed_test_failed.disconnect(self._on_test_dialog_failed)
-            except TypeError:
+            except (TypeError, RuntimeError):
                 pass
+
+    def _on_test_dialog_progress(self, status, download_speed, upload_speed):
+        if self._test_dialog is not None and self._test_dialog.isVisible():
+            self._test_dialog.update_display(status, download_speed, upload_speed)
 
     def _on_test_dialog_result(self, download_speed, upload_speed):
         if self._test_dialog is not None:

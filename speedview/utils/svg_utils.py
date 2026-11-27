@@ -67,15 +67,15 @@ def update_svg_speed(svg_template, speed, max_speed, show_upload=False, angle=No
 
     updated_svg = re.sub(
         r'<text id="speedValue".*?>.*?</text>',
-        f'<text id="speedValue" x="250" y="300" text-anchor="middle" '
-        f'font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#00F0FF" filter="url(#glowEffect)">{speed_label}</text>',
+        f'<text id="speedValue" x="250" y="308" text-anchor="middle" '
+        f'font-size="52" font-weight="700" fill="#F2F6FF" filter="url(#glowEffect)">{speed_label}</text>',
         svg_template,
     )
 
     updated_svg = re.sub(
         r'<text id="speedUnit".*?>.*?</text>',
-        f'<text id="speedUnit" x="250" y="336" text-anchor="middle" '
-        f'font-family="Arial, sans-serif" font-size="22" fill="#00F0FF" opacity="0.8">{escape(speed_unit)}</text>',
+        f'<text id="speedUnit" x="250" y="338" text-anchor="middle" '
+        f'font-size="18" font-weight="500" fill="#7DD3FC" opacity="0.9">{escape(speed_unit)}</text>',
         updated_svg,
     )
 
@@ -83,7 +83,7 @@ def update_svg_speed(svg_template, speed, max_speed, show_upload=False, angle=No
     updated_svg = re.sub(
         r'<text id="speedType".*?>.*?</text>',
         f'<text id="speedType" x="250" y="362" text-anchor="middle" '
-        f'font-family="Arial, sans-serif" font-size="13" fill="#00F0FF" opacity="0.65">{type_text}</text>',
+        f'font-size="12" font-weight="500" letter-spacing="1" fill="#8FA3C9">{type_text}</text>',
         updated_svg,
     )
 
@@ -100,23 +100,30 @@ def update_svg_speed(svg_template, speed, max_speed, show_upload=False, angle=No
         updated_svg,
     )
 
-    # Update dial scale labels linearly across -135..+135
+    # Update upright dial scale labels and cyan->blue->violet ticks across -135..+135
     marks = []
     for idx in range(7):
         deg = -135 + idx * 45
         val = (display_max * idx) / 6.0
         major = idx % 2 == 0
-        y2 = 60 if major else 65
-        sw = 3 if major else 2
-        fs = 15 if major else 13
-        op = "" if major else ' opacity="0.75"'
+        y2 = 56 if major else 60
+        sw = "2.5" if major else "2"
+        fs = 12 if major else 11
+        tick_color = "#22D3EE" if deg < 0 else ("#3B82F6" if deg <= 45 else "#8B5CF6")
+        line_op = "" if major else ' opacity="0.6"'
+        text_op = "" if major else ' opacity="0.7"'
+        counter_rot = f' transform="rotate({-deg} 250 50)"' if deg != 0 else ""
         marks.append(
             f'    <g transform="rotate({deg} 250 250)">\n'
-            f'      <line x1="250" y1="80" x2="250" y2="{y2}" stroke="#00F0FF" stroke-width="{sw}"/>\n'
-            f'      <text x="250" y="50" text-anchor="middle" font-size="{fs}" fill="#00F0FF"{op}>{_format_scale_label(val)}</text>\n'
+            f'      <line x1="250" y1="66" x2="250" y2="{y2}" stroke="{tick_color}" stroke-width="{sw}" stroke-linecap="round"{line_op}/>\n'
+            f'      <text x="250" y="50" text-anchor="middle" font-size="{fs}" fill="#9FB3D9"{text_op}{counter_rot}>{_format_scale_label(val)}</text>\n'
             f'    </g>'
         )
-    dial_block = '<g id="dialMarks" font-family="Arial, sans-serif" font-weight="bold">\n' + "\n".join(marks) + '\n  </g>'
+    dial_block = (
+        '<g id="dialMarks" font-family="Inter, \'SF Pro Display\', \'Segoe UI\', Roboto, \'Helvetica Neue\', Arial, sans-serif" font-weight="600">\n'
+        + "\n".join(marks)
+        + '\n  </g>'
+    )
     updated_svg = re.sub(
         r'<g id="dialMarks"[^>]*>.*?</g>\s*</g>',
         dial_block,
@@ -129,7 +136,7 @@ def update_svg_speed(svg_template, speed, max_speed, show_upload=False, angle=No
 
 def update_svg_connection_status(svg_template, status, connection_type="Unknown", meta_text=""):
     """Update connection status, real interface type/detail, and metadata in SVG template."""
-    color = "#00F0FF" if status == "Connected" else ("#FFAA00" if status == "Checking..." else "#FF5050")
+    color = "#F2F6FF" if status == "Connected" else ("#FBBF24" if status == "Checking..." else "#FF8CA1")
     safe_status = escape(str(status or "Unknown"))
     safe_type = escape(str(connection_type or "Unknown"))
     safe_meta = escape(str(meta_text or ""))
@@ -137,19 +144,19 @@ def update_svg_connection_status(svg_template, status, connection_type="Unknown"
     updated_svg = re.sub(
         r'<text id="connectionStatus".*?>.*?</text>',
         f'<text id="connectionStatus" x="76" y="58" text-anchor="start" '
-        f'font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="{color}" opacity="0.9">{safe_status}</text>',
+        f'font-size="14" font-weight="700" fill="{color}">{safe_status}</text>',
         svg_template,
     )
     updated_svg = re.sub(
         r'<text id="networkType".*?>.*?</text>',
         f'<text id="networkType" x="76" y="76" text-anchor="start" '
-        f'font-family="Arial, sans-serif" font-size="12" fill="#00F0FF" opacity="0.75">{safe_type}</text>',
+        f'font-size="12" font-weight="500" fill="#8FA3C9">{safe_type}</text>',
         updated_svg,
     )
     updated_svg = re.sub(
         r'<text id="networkMeta".*?>.*?</text>',
         f'<text id="networkMeta" x="250" y="384" text-anchor="middle" '
-        f'font-family="Arial, sans-serif" font-size="11" fill="#88D8E6" opacity="0.75">{safe_meta}</text>',
+        f'font-size="11" fill="#6B7A9E">{safe_meta}</text>',
         updated_svg,
     )
     return updated_svg
@@ -171,35 +178,35 @@ def update_test_network_svg(svg_template, status, download, upload):
         title = "Test Failed"
         if raw_status == "Test Failed":
             display_status = "Check connection and try again"
-    elif "Running" in raw_status or "Testing" in raw_status:
+    elif any(k in raw_status for k in ("Running", "Testing", "Downloading", "Uploading", "Connecting")):
         title = "Testing Network Speed..."
 
     if len(display_status) > 36:
         display_status = display_status[:35] + "…"
     safe_status = escape(display_status)
 
-    # Scale progress bars up to 160px (assuming 100 Mbps reference, capped at 160px)
+    # Scale progress bars up to 160px (100 Mbps reference, capped at 160px)
     dl_width = min(160.0, (dl / 100.0) * 160.0) if dl > 0 else 0.0
     ul_width = min(160.0, (ul / 100.0) * 160.0) if ul > 0 else 0.0
 
     updated_svg = re.sub(
         r'<text id="testTitle".*?>.*?</text>',
-        f'<text id="testTitle" x="150" y="75" font-family="Arial" font-size="17" font-weight="bold" fill="#FFFFFF" text-anchor="middle">{title}</text>',
+        f'<text id="testTitle" x="150" y="72" font-size="18" font-weight="700" fill="#F2F6FF" text-anchor="middle">{title}</text>',
         svg_template,
     )
     updated_svg = re.sub(
         r'<text id="testStatus".*?>.*?</text>',
-        f'<text id="testStatus" x="150" y="182" font-family="Arial" font-size="13" fill="#AAAAAA" text-anchor="middle">{safe_status}</text>',
+        f'<text id="testStatus" x="150" y="186" font-size="13" fill="#8FA3C9" text-anchor="middle">{safe_status}</text>',
         updated_svg,
     )
     updated_svg = re.sub(
         r'<text id="downloadSpeed".*?>.*?</text>',
-        f'<text id="downloadSpeed" x="230" y="220" font-family="Arial" font-size="14" fill="#00F0FF" filter="url(#glowEffect)" text-anchor="end">{dl:.2f} Mbps</text>',
+        f'<text id="downloadSpeed" x="230" y="220" font-size="14" font-weight="700" fill="#22D3EE" text-anchor="end">{dl:.2f} Mbps</text>',
         updated_svg,
     )
     updated_svg = re.sub(
         r'<text id="uploadSpeed".*?>.*?</text>',
-        f'<text id="uploadSpeed" x="230" y="250" font-family="Arial" font-size="14" fill="#00F0FF" filter="url(#glowEffect)" text-anchor="end">{ul:.2f} Mbps</text>',
+        f'<text id="uploadSpeed" x="230" y="250" font-size="14" font-weight="700" fill="#A78BFA" text-anchor="end">{ul:.2f} Mbps</text>',
         updated_svg,
     )
     updated_svg = re.sub(
@@ -253,14 +260,14 @@ def update_floating_svg(svg_template, speed, signal_strength, connection_type, b
 
     updated_svg = re.sub(
         r'<text id="speedValue".*?>.*?</text>',
-        f'<text id="speedValue" x="60" y="45" font-family="Arial, sans-serif" '
-        f'font-size="24" font-weight="bold" fill="url(#speedTextGradient)" text-anchor="middle" filter="url(#glow)">{speed_str}</text>',
+        f'<text id="speedValue" x="60" y="45" font-size="26" font-weight="700" '
+        f'fill="url(#speedTextGradient)" text-anchor="middle" filter="url(#glow)">{speed_str}</text>',
         svg_template,
     )
 
     updated_svg = re.sub(
         r'<text id="speedUnit".*?>.*?</text>',
-        f'<text id="speedUnit" x="60" y="65" font-family="Arial, sans-serif" font-size="14" fill="#00FF8F" text-anchor="middle" opacity="0.8">{escape(speed_unit)}</text>',
+        f'<text id="speedUnit" x="60" y="65" font-size="12" font-weight="500" fill="#8FA3C9" text-anchor="middle">{escape(speed_unit)}</text>',
         updated_svg,
     )
 
@@ -271,13 +278,13 @@ def update_floating_svg(svg_template, speed, signal_strength, connection_type, b
 
     updated_svg = re.sub(
         r'<text id="connectionType".*?>.*?</text>',
-        f'<text id="connectionType" x="195" y="36" font-family="Arial, sans-serif" font-size="13" fill="#00FF8F" text-anchor="middle">{safe_type}</text>',
+        f'<text id="connectionType" x="195" y="38" font-size="13" font-weight="700" fill="#E6FFF6" text-anchor="middle">{safe_type}</text>',
         updated_svg,
     )
 
     updated_svg = re.sub(
         r'<text id="connectionBand".*?>.*?</text>',
-        f'<text id="connectionBand" x="195" y="54" font-family="Arial, sans-serif" font-size="10" fill="#00FF8F" text-anchor="middle" opacity="0.75">{safe_band}</text>',
+        f'<text id="connectionBand" x="195" y="54" font-size="10" font-weight="500" fill="#8FA3C9" text-anchor="middle">{safe_band}</text>',
         updated_svg,
     )
 
@@ -295,15 +302,15 @@ def update_floating_svg(svg_template, speed, signal_strength, connection_type, b
     else:
         filled_bars = 0
 
-    fills = ["#00FF8F" if i < filled_bars else "#222222" for i in range(4)]
-    opacities = ["0.9" if i < filled_bars else "0.35" for i in range(4)]
+    fills = ["#2EE6A6" if i < filled_bars else "#1B2540" for i in range(4)]
+    opacities = ["0.95" if i < filled_bars else "0.6" for i in range(4)]
 
     signal_replacement = (
         '<g transform="translate(130, 30)">\n'
-        f'      <rect x="0" y="10" width="5" height="10" rx="2" fill="{fills[0]}" opacity="{opacities[0]}"/>\n'
-        f'      <rect x="10" y="5" width="5" height="15" rx="2" fill="{fills[1]}" opacity="{opacities[1]}"/>\n'
-        f'      <rect x="20" y="0" width="5" height="20" rx="2" fill="{fills[2]}" opacity="{opacities[2]}"/>\n'
-        f'      <rect x="30" y="-5" width="5" height="25" rx="2" fill="{fills[3]}" opacity="{opacities[3]}"/>\n'
+        f'      <rect class="signal-bar" x="0" y="10" width="5" height="10" rx="2.5" fill="{fills[0]}" opacity="{opacities[0]}"/>\n'
+        f'      <rect class="signal-bar" x="10" y="5" width="5" height="15" rx="2.5" fill="{fills[1]}" opacity="{opacities[1]}"/>\n'
+        f'      <rect class="signal-bar" x="20" y="0" width="5" height="20" rx="2.5" fill="{fills[2]}" opacity="{opacities[2]}"/>\n'
+        f'      <rect class="signal-bar" x="30" y="-5" width="5" height="25" rx="2.5" fill="{fills[3]}" opacity="{opacities[3]}"/>\n'
         '    </g>'
     )
 
@@ -324,36 +331,36 @@ def update_data_usage_svg(svg_template, daily_total_str, monthly_total_str, rows
     subtitle = "Daily Breakdown" if mode == "daily" else "Monthly Breakdown"
     updated = re.sub(
         r'<text id="usageModeSubtitle".*?>.*?</text>',
-        f'<text id="usageModeSubtitle" x="158" y="34" font-family="Arial, sans-serif" font-size="12" fill="#88D8E6" opacity="0.8">{subtitle}</text>',
+        f'<text id="usageModeSubtitle" x="158" y="34" font-size="12" font-weight="500" fill="#6FA8C0">{subtitle}</text>',
         svg_template,
     )
     updated = re.sub(
         r'<text id="dailyTotal".*?>.*?</text>',
-        f'<text id="dailyTotal" x="44" y="102" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#00F0FF">{escape(str(daily_total_str))}</text>',
+        f'<text id="dailyTotal" x="44" y="102" font-size="24" font-weight="700" fill="#22D3EE">{escape(str(daily_total_str))}</text>',
         updated,
     )
     updated = re.sub(
         r'<text id="monthlyTotal".*?>.*?</text>',
-        f'<text id="monthlyTotal" x="284" y="102" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#00FFAA">{escape(str(monthly_total_str))}</text>',
+        f'<text id="monthlyTotal" x="284" y="102" font-size="24" font-weight="700" fill="#34D399">{escape(str(monthly_total_str))}</text>',
         updated,
     )
 
     daily_fill = "url(#usageBtnGradient)" if mode == "daily" else "#18222D"
-    daily_stroke = "#00F0FF" if mode == "daily" else "#2D4A63"
-    daily_text = "#FFFFFF" if mode == "daily" else "#88D8E6"
+    daily_stroke = "#22D3EE" if mode == "daily" else "#2D4A63"
+    daily_text = "#FFFFFF" if mode == "daily" else "#8FA3C9"
 
     monthly_fill = "url(#usageBtnGradient)" if mode == "monthly" else "#18222D"
-    monthly_stroke = "#00F0FF" if mode == "monthly" else "#2D4A63"
-    monthly_text = "#FFFFFF" if mode == "monthly" else "#88D8E6"
+    monthly_stroke = "#22D3EE" if mode == "monthly" else "#2D4A63"
+    monthly_text = "#FFFFFF" if mode == "monthly" else "#8FA3C9"
 
     tabs_block = (
         '<g id="usageTabs">\n'
         f'    <rect id="dailyTabRect" x="28" y="130" width="105" height="30" rx="15" fill="{daily_fill}" stroke="{daily_stroke}" stroke-width="1"/>\n'
-        f'    <text x="80.5" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="{daily_text}">DAILY</text>\n'
+        f'    <text x="80.5" y="149.5" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="0.6" fill="{daily_text}">DAILY</text>\n'
         f'    <rect id="monthlyTabRect" x="143" y="130" width="115" height="30" rx="15" fill="{monthly_fill}" stroke="{monthly_stroke}" stroke-width="1"/>\n'
-        f'    <text x="200.5" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="{monthly_text}">MONTHLY</text>\n'
-        '    <rect id="resetUsageRect" x="392" y="130" width="100" height="30" rx="15" fill="#241519" stroke="#FF5050" stroke-width="1"/>\n'
-        '    <text x="442" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#FF8080">RESET</text>\n'
+        f'    <text x="200.5" y="149.5" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="0.6" fill="{monthly_text}">MONTHLY</text>\n'
+        '    <rect id="resetUsageRect" x="392" y="130" width="100" height="30" rx="15" fill="#FF5C7A" fill-opacity="0.10" stroke="#FF5C7A" stroke-opacity="0.55" stroke-width="1"/>\n'
+        '    <text x="442" y="149.5" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="0.6" fill="#FF8CA1">RESET</text>\n'
         '  </g>'
     )
     updated = re.sub(r'<g id="usageTabs">.*?</g>', tabs_block, updated, flags=re.DOTALL)
@@ -361,7 +368,7 @@ def update_data_usage_svg(svg_template, daily_total_str, monthly_total_str, rows
     row_elements = []
     if not rows:
         row_elements.append(
-            '<text x="260" y="308" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#778899">'
+            '<text x="260" y="308" text-anchor="middle" font-size="13" fill="#6B7A9E">'
             'No network app traffic recorded for this period yet.</text>'
         )
     else:
@@ -375,14 +382,14 @@ def update_data_usage_svg(svg_template, daily_total_str, monthly_total_str, rows
             data_str = format_bytes(row.get("bytes", 0))
             date_str = str(row.get("date", ""))
             bar_w = max(4.0, (row.get("bytes", 0) / max_bytes) * 165.0)
-            bg_fill = "#121B26" if idx % 2 == 0 else "#0E141C"
+            bg_fill = "#111B2E" if idx % 2 == 0 else "#0B121A"
 
             row_elements.append(
-                f'    <rect x="34" y="{y_top}" width="452" height="25" rx="4" fill="{bg_fill}"/>\n'
-                f'    <rect x="46" y="{y_top + 21}" width="{bar_w:.1f}" height="2" rx="1" fill="url(#usageArcGradient)" opacity="0.75"/>\n'
-                f'    <text x="46" y="{y_text}" font-family="Arial, sans-serif" font-size="12" fill="#E6F7FF">{escape(app_name)}</text>\n'
-                f'    <text x="332" y="{y_text}" text-anchor="end" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#00F0FF">{escape(data_str)}</text>\n'
-                f'    <text x="474" y="{y_text}" text-anchor="end" font-family="Arial, sans-serif" font-size="11" fill="#88A4B8">{escape(date_str)}</text>'
+                f'    <rect x="34" y="{y_top}" width="452" height="25" rx="6" fill="{bg_fill}"/>\n'
+                f'    <rect x="46" y="{y_top + 21}" width="{bar_w:.1f}" height="2" rx="1" fill="url(#usageArcGradient)" opacity="0.8"/>\n'
+                f'    <text x="46" y="{y_text}" font-size="12" font-weight="500" fill="#F2F6FF">{escape(app_name)}</text>\n'
+                f'    <text x="332" y="{y_text}" text-anchor="end" font-size="12" font-weight="700" fill="#22D3EE">{escape(data_str)}</text>\n'
+                f'    <text x="474" y="{y_text}" text-anchor="end" font-size="11" fill="#8FA3C9">{escape(date_str)}</text>'
             )
 
     rows_block = '<g id="usageRows">\n' + "\n".join(row_elements) + '\n  </g>'

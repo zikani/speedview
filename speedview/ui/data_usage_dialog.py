@@ -33,7 +33,7 @@ class DataUsageDialog(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")
         self.setFixedSize(520, 480)
-        apply_rounded_mask(self, 4, 4, 512, 472, radius=15)
+        apply_rounded_mask(self, 4, 4, 512, 472, radius=24)
 
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)

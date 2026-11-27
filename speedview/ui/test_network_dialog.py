@@ -33,7 +33,7 @@ class TestNetworkDialog(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")
         self.setFixedSize(300, 340)
-        apply_rounded_mask(self, 10, 10, 280, 320, radius=10)
+        apply_rounded_mask(self, 10, 10, 280, 320, radius=24)
 
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)

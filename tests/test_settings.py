@@ -135,6 +135,49 @@ class TestSettingsAndDetection(unittest.TestCase):
         tray.hide()
         main.close()
 
+    def test_measure_file_speed_realtime_metrics(self):
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        payload = b"A" * (512 * 1024)
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length", "0"))
+                _ = self.rfile.read(length)
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"OK")
+
+            def log_message(self, format, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            nc = NetworkController()
+            progress_events = []
+            dl, ul = nc.measure_file_speed(
+                download_urls=[f"http://127.0.0.1:{port}/test.bin"],
+                upload_urls=[f"http://127.0.0.1:{port}/upload"],
+                upload_size_bytes=256 * 1024,
+                progress_callback=lambda s, d, u: progress_events.append((s, d, u)),
+            )
+            self.assertGreater(dl, 0.0)
+            self.assertGreater(ul, 0.0)
+            self.assertGreaterEqual(len(progress_events), 2)
+        finally:
+            server.shutdown()
+            server.server_close()
+
 
 if __name__ == '__main__':
     unittest.main()

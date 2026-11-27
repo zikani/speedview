@@ -42,7 +42,7 @@ class FloatingWindow(QWidget):
         """Initialize the UI components"""
         self.setWindowTitle("SpeedView - Floating Mode")
         self.setFixedSize(250, 80)
-        apply_rounded_mask(self, 0, 0, 250, 80, radius=15)
+        apply_rounded_mask(self, 0, 0, 250, 80, radius=24)
 
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
