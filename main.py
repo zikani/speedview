@@ -19,6 +19,7 @@ if __name__ == '__main__':
     try:
         logging.info('Starting SpeedView application')
         app = QApplication(sys.argv)
+        app.setQuitOnLastWindowClosed(False)
 
         window = NetworkSpeedMeter()
         logging.info('Checking for updates on startup')

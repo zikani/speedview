@@ -10,17 +10,178 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QSpinBox,
     QDoubleSpinBox,
-    QMenuBar,
-    QMenu,
-    QAction,
     QPushButton,
     QHBoxLayout,
+    QLabel,
+    QScrollArea,
+    QWidget,
+    QFrame,
 )
 from PyQt5.QtCore import Qt
 import psutil
 
 from speedview.config.config import APP_VERSION, DEFAULT_RELEASES_PAGE_URL
 from speedview.update.updater import UpdateChecker
+
+
+SETTINGS_MODERN_QSS = """
+QDialog {
+    background-color: #0B1220;
+    color: #F2F6FF;
+    font-family: Inter, 'Segoe UI', Roboto, Arial, sans-serif;
+    font-size: 13px;
+}
+QScrollArea {
+    background-color: transparent;
+    border: none;
+}
+QWidget#settingsContent {
+    background-color: #0B1220;
+}
+QFrame#headerCard {
+    background-color: #111B2E;
+    border: 1px solid #1E2E4A;
+    border-radius: 14px;
+}
+QLabel#titleLabel {
+    color: #F2F6FF;
+    font-size: 18px;
+    font-weight: 700;
+}
+QLabel#subtitleLabel {
+    color: #8FA3C9;
+    font-size: 12px;
+}
+QGroupBox {
+    background-color: #111B2E;
+    border: 1px solid #1E2E4A;
+    border-radius: 12px;
+    margin-top: 14px;
+    padding: 16px 14px 12px 14px;
+    font-weight: 700;
+    font-size: 12px;
+    color: #22D3EE;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 14px;
+    top: 4px;
+    padding: 0 6px;
+    background-color: #0B1220;
+    color: #22D3EE;
+    letter-spacing: 0.6px;
+}
+QLabel {
+    color: #CBD5F5;
+    font-size: 12.5px;
+    background: transparent;
+}
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+    background-color: #080E1A;
+    color: #F2F6FF;
+    border: 1px solid #243656;
+    border-radius: 8px;
+    padding: 6px 10px;
+    min-height: 22px;
+    selection-background-color: #2563EB;
+}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+    border: 1px solid #22D3EE;
+}
+QComboBox:disabled, QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {
+    background-color: #0D1524;
+    color: #5C6E91;
+    border-color: #182338;
+}
+QComboBox::drop-down {
+    border: none;
+    width: 24px;
+}
+QComboBox QAbstractItemView {
+    background-color: #0E1628;
+    color: #F2F6FF;
+    border: 1px solid #243656;
+    selection-background-color: #2563EB;
+    selection-color: #FFFFFF;
+}
+QCheckBox {
+    color: #E2ECFF;
+    spacing: 8px;
+    background: transparent;
+}
+QCheckBox::indicator {
+    width: 17px;
+    height: 17px;
+    border-radius: 5px;
+    border: 1.5px solid #334A70;
+    background-color: #080E1A;
+}
+QCheckBox::indicator:checked {
+    background-color: #22D3EE;
+    border-color: #22D3EE;
+}
+QPushButton {
+    background-color: #16233B;
+    color: #E2ECFF;
+    border: 1px solid #283C61;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-weight: 600;
+    font-size: 12px;
+}
+QPushButton:hover {
+    background-color: #1E2F4E;
+    border-color: #22D3EE;
+    color: #FFFFFF;
+}
+QPushButton:pressed {
+    background-color: #132036;
+}
+QPushButton#headerPill {
+    background-color: #16233B;
+    color: #9FB3D9;
+    border: 1px solid #243656;
+    border-radius: 14px;
+    padding: 5px 12px;
+    font-size: 11.5px;
+}
+QPushButton#headerPill:hover {
+    color: #22D3EE;
+    border-color: #22D3EE;
+}
+QPushButton#primaryBtn {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2563EB, stop:1 #1E40AF);
+    color: #FFFFFF;
+    border: 1px solid #3B82F6;
+    border-radius: 9px;
+    padding: 8px 18px;
+    font-weight: 700;
+}
+QPushButton#primaryBtn:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3B82F6, stop:1 #2563EB);
+}
+QScrollBar:vertical {
+    background: #0B1220;
+    width: 8px;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical {
+    background: #243656;
+    border-radius: 4px;
+    min-height: 24px;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+QMessageBox {
+    background-color: #0E1628;
+    color: #F2F6FF;
+}
+QMessageBox QLabel {
+    color: #F2F6FF;
+}
+"""
 
 
 class SettingsDialog(QDialog):
@@ -33,84 +194,108 @@ class SettingsDialog(QDialog):
         self.setup_ui()
 
     def setup_ui(self):
-        self.setWindowTitle("Network Monitor Settings")
+        self.setWindowTitle("SpeedView Settings")
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-        self.setMinimumWidth(420)
+        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        self.setAutoFillBackground(True)
+        self.setStyleSheet(SETTINGS_MODERN_QSS)
+        self.setMinimumSize(500, 520)
+        self.resize(520, 600)
 
-        self.layout = QVBoxLayout(self)
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(16, 16, 16, 16)
+        root_layout.setSpacing(12)
 
-        self.create_menu_bar()
+        self.create_header(root_layout)
+
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+
+        content = QWidget()
+        content.setObjectName("settingsContent")
+        self.layout = QVBoxLayout(content)
+        self.layout.setContentsMargins(2, 2, 6, 4)
+        self.layout.setSpacing(10)
+
         self.create_monitoring_group()
         self.create_behavior_group()
         self.create_display_group()
         self.create_notification_group()
-        self.create_button_box()
+        self.layout.addStretch(1)
 
+        scroll.setWidget(content)
+        root_layout.addWidget(scroll, 1)
+
+        self.create_button_box(root_layout)
         self.load_settings()
 
-    def create_menu_bar(self):
-        """Create menu bar with Help, About, and Update options"""
-        self.menu_bar = QMenuBar(self)
+    def create_header(self, parent_layout):
+        """Create modern header banner with quick Help / About / Updates actions."""
+        header = QFrame(self)
+        header.setObjectName("headerCard")
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(14, 12, 14, 12)
+        header_layout.setSpacing(10)
 
-        help_menu = QMenu("&Help", self)
-        self.menu_bar.addMenu(help_menu)
+        text_col = QVBoxLayout()
+        text_col.setSpacing(2)
+        title = QLabel("SpeedView Settings")
+        title.setObjectName("titleLabel")
+        subtitle = QLabel(f"Configure interface, gauge scaling, tray & alerts  •  v{APP_VERSION}")
+        subtitle.setObjectName("subtitleLabel")
+        text_col.addWidget(title)
+        text_col.addWidget(subtitle)
+        header_layout.addLayout(text_col, 1)
 
-        help_action = QAction("View &Help", self)
-        help_action.setShortcut("F1")
-        help_action.triggered.connect(self.show_help)
-        help_menu.addAction(help_action)
+        help_btn = QPushButton("Help")
+        help_btn.setObjectName("headerPill")
+        help_btn.clicked.connect(self.show_help)
+        header_layout.addWidget(help_btn)
 
-        about_menu = QMenu("&About", self)
-        self.menu_bar.addMenu(about_menu)
+        about_btn = QPushButton("About")
+        about_btn.setObjectName("headerPill")
+        about_btn.clicked.connect(self.show_about)
+        header_layout.addWidget(about_btn)
 
-        about_action = QAction("&About SpeedView", self)
-        about_action.triggered.connect(self.show_about)
-        about_menu.addAction(about_action)
+        updates_btn = QPushButton("Updates")
+        updates_btn.setObjectName("headerPill")
+        updates_btn.clicked.connect(self.check_updates)
+        header_layout.addWidget(updates_btn)
 
-        version_action = QAction("Check for &Updates", self)
-        version_action.triggered.connect(self.check_updates)
-        about_menu.addAction(version_action)
-
-        self.layout.addWidget(self.menu_bar)
+        parent_layout.addWidget(header)
 
     def show_help(self):
-        """Show help documentation"""
+        """Show help documentation."""
         QMessageBox.information(
             self,
-            "Help",
-            """SpeedView - Network Speed Meter Help:
-
-1. Monitoring Settings:
-   - Select your network interface (or enable Auto-select)
-   - Set maximum speeds for gauge scaling
-   - Adjust update interval
-
-2. Application Behavior:
-   - Configure startup options
-   - System tray behavior
-
-3. Display Settings:
-   - Speed units (Mbps, MB/s, Kbps) and upload/download toggle
-
-4. Notification Settings:
-   - Configure speed alerts and thresholds""",
+            "SpeedView Help",
+            "SpeedView - Network Speed Meter:\n\n"
+            "1. Monitoring:\n"
+            "   - Choose a specific network interface or enable Auto-select.\n"
+            "   - Configure download/upload gauge scales and refresh rate.\n\n"
+            "2. Behavior & Background:\n"
+            "   - Minimizing sends SpeedView to the system tray.\n"
+            "   - Closing the main window opens the compact Float widget.\n"
+            "   - Closing the Float widget keeps background monitoring running in the tray.\n\n"
+            "3. Display & Alerts:\n"
+            "   - Switch between Mbps, MB/s, and Kbps units.\n"
+            "   - Set high-speed notification thresholds.",
         )
 
     def show_about(self):
-        """Show about dialog"""
+        """Show about dialog."""
         QMessageBox.about(
             self,
             "About SpeedView",
-            f"""SpeedView - Network Speed Meter v{APP_VERSION}
-
-A real-time network speed monitoring tool built with PyQt5 and SVG.
-
-Project: {DEFAULT_RELEASES_PAGE_URL}
-Licensed under MIT""",
+            f"SpeedView - Network Speed Meter v{APP_VERSION}\n\n"
+            "A cross-platform real-time network speed monitor built with PyQt5 and SVG.\n\n"
+            f"Releases: {DEFAULT_RELEASES_PAGE_URL}\n"
+            "Licensed under MIT",
         )
 
     def check_updates(self):
-        """Check for software updates"""
+        """Check for software updates."""
         try:
             self.updater = UpdateChecker(settings=self.settings)
             has_update = self.updater.check_for_updates()
@@ -130,28 +315,30 @@ Licensed under MIT""",
             QMessageBox.warning(self, "Update Check Failed", f"Could not check for updates:\n{str(e)}")
 
     def create_monitoring_group(self):
-        """Create monitoring settings group."""
-        group = QGroupBox("Monitoring Settings")
+        """Create monitoring settings card."""
+        group = QGroupBox("MONITORING & INTERFACE")
         layout = QFormLayout()
+        layout.setSpacing(10)
+        layout.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         interface_layout = QVBoxLayout()
+        interface_layout.setSpacing(6)
 
         interface_select_layout = QHBoxLayout()
+        interface_select_layout.setSpacing(8)
         self.network_interface_combo = QComboBox()
         self.refresh_interfaces_button = QPushButton("Refresh")
         self.refresh_interfaces_button.clicked.connect(self.refresh_interfaces)
-        interface_select_layout.addWidget(self.network_interface_combo)
+        interface_select_layout.addWidget(self.network_interface_combo, 1)
         interface_select_layout.addWidget(self.refresh_interfaces_button)
         interface_layout.addLayout(interface_select_layout)
 
-        auto_select_layout = QHBoxLayout()
-        self.auto_select_checkbox = QCheckBox("Auto-select best interface")
+        self.auto_select_checkbox = QCheckBox("Auto-select best active interface")
         self.auto_select_checkbox.setToolTip("Automatically switch to the best available network interface")
         self.auto_select_checkbox.toggled.connect(
             lambda checked: self.network_interface_combo.setEnabled(not checked)
         )
-        auto_select_layout.addWidget(self.auto_select_checkbox)
-        interface_layout.addLayout(auto_select_layout)
+        interface_layout.addWidget(self.auto_select_checkbox)
 
         self.refresh_interfaces()
         layout.addRow("Network Interface:", interface_layout)
@@ -159,32 +346,32 @@ Licensed under MIT""",
         self.max_speed_input = QSpinBox()
         self.max_speed_input.setRange(1, 10000)
         self.max_speed_input.setSuffix(" Mbps")
-        self.max_speed_input.setToolTip("Maximum expected download speed for scaling")
-        layout.addRow("Max Download Speed:", self.max_speed_input)
+        self.max_speed_input.setToolTip("Maximum expected download speed for gauge scaling")
+        layout.addRow("Max Download Scale:", self.max_speed_input)
 
         self.max_upload_input = QSpinBox()
         self.max_upload_input.setRange(1, 10000)
         self.max_upload_input.setSuffix(" Mbps")
-        self.max_upload_input.setToolTip("Maximum expected upload speed for scaling")
-        layout.addRow("Max Upload Speed:", self.max_upload_input)
-
-        self.update_url_input = QLineEdit()
-        self.update_url_input.setPlaceholderText("Update URL (GitHub API or custom)")
-        self.update_url_input.setToolTip("URL used to check for software updates")
-        layout.addRow("Update URL:", self.update_url_input)
+        self.max_upload_input.setToolTip("Maximum expected upload speed for gauge scaling")
+        layout.addRow("Max Upload Scale:", self.max_upload_input)
 
         self.update_interval_input = QDoubleSpinBox()
         self.update_interval_input.setRange(0.1, 60.0)
-        self.update_interval_input.setSuffix(" seconds")
+        self.update_interval_input.setSuffix(" s")
         self.update_interval_input.setSingleStep(0.5)
-        self.update_interval_input.setToolTip("How often to update the speed display")
+        self.update_interval_input.setToolTip("How often to sample network throughput")
         layout.addRow("Update Interval:", self.update_interval_input)
+
+        self.update_url_input = QLineEdit()
+        self.update_url_input.setPlaceholderText("https://api.github.com/repos/...")
+        self.update_url_input.setToolTip("URL used to check for software updates")
+        layout.addRow("Update URL:", self.update_url_input)
 
         group.setLayout(layout)
         self.layout.addWidget(group)
 
     def refresh_interfaces(self):
-        """Refresh the list of network interfaces"""
+        """Refresh the list of network interfaces."""
         try:
             self.network_interface_combo.clear()
             interfaces = []
@@ -192,7 +379,7 @@ Licensed under MIT""",
 
             for interface, stat in stats.items():
                 if stat.isup and not any(x in interface.lower() for x in ['vethernet', 'vmware', 'virtual']):
-                    speed = f"{stat.speed}Mbps" if stat.speed else "Active"
+                    speed = f"{stat.speed} Mbps" if stat.speed else "Active"
                     self.network_interface_combo.addItem(f"{interface} ({speed})", interface)
                     interfaces.append(interface)
 
@@ -215,69 +402,80 @@ Licensed under MIT""",
             self.network_interface_combo.addItem("No interfaces found", None)
 
     def create_behavior_group(self):
-        """Create application behavior group."""
-        group = QGroupBox("Application Behavior")
-        layout = QFormLayout()
+        """Create application behavior card."""
+        group = QGroupBox("BEHAVIOR & SYSTEM TRAY")
+        layout = QVBoxLayout()
+        layout.setSpacing(8)
 
-        self.start_minimized_checkbox = QCheckBox()
-        self.start_minimized_checkbox.setToolTip("Start the application minimized to system tray")
-        layout.addRow("Start Minimized:", self.start_minimized_checkbox)
+        self.start_minimized_checkbox = QCheckBox("Start minimized in system tray on launch")
+        self.start_minimized_checkbox.setToolTip("Start the application hidden in the system tray")
+        layout.addWidget(self.start_minimized_checkbox)
 
-        self.minimize_to_tray_checkbox = QCheckBox()
-        self.minimize_to_tray_checkbox.setToolTip("Minimize to system tray instead of taskbar")
-        layout.addRow("Minimize to Tray:", self.minimize_to_tray_checkbox)
+        self.minimize_to_tray_checkbox = QCheckBox("Keep system tray icon active for background monitoring")
+        self.minimize_to_tray_checkbox.setToolTip("Minimize to system tray and keep tracking speed & data usage")
+        layout.addWidget(self.minimize_to_tray_checkbox)
 
-        self.close_to_tray_checkbox = QCheckBox()
-        self.close_to_tray_checkbox.setToolTip("Close button minimizes to tray instead of exiting")
-        layout.addRow("Close to Tray:", self.close_to_tray_checkbox)
+        self.close_to_tray_checkbox = QCheckBox("Switch to Float / Tray when closing windows")
+        self.close_to_tray_checkbox.setToolTip("Keep running in background instead of quitting on window close")
+        layout.addWidget(self.close_to_tray_checkbox)
 
         group.setLayout(layout)
         self.layout.addWidget(group)
 
     def create_display_group(self):
-        """Create display settings group."""
-        group = QGroupBox("Display Settings")
+        """Create display settings card."""
+        group = QGroupBox("DISPLAY & UNITS")
         layout = QFormLayout()
-
-        self.show_upload_speed_checkbox = QCheckBox()
-        self.show_upload_speed_checkbox.setToolTip("Show upload speed instead of download speed")
-        layout.addRow("Show Upload Speed:", self.show_upload_speed_checkbox)
+        layout.setSpacing(10)
 
         self.speed_unit_combo = QComboBox()
         self.speed_unit_combo.addItems(["Mbps", "MB/s", "Kbps"])
         self.speed_unit_combo.setToolTip("Unit to display network speeds")
         layout.addRow("Speed Unit:", self.speed_unit_combo)
 
+        self.show_upload_speed_checkbox = QCheckBox("Show upload speed on main gauge instead of download")
+        self.show_upload_speed_checkbox.setToolTip("Toggle primary gauge display between Download and Upload")
+        layout.addRow("", self.show_upload_speed_checkbox)
+
         group.setLayout(layout)
         self.layout.addWidget(group)
 
     def create_notification_group(self):
-        """Create notification settings group."""
-        group = QGroupBox("Notification Settings")
+        """Create notification settings card."""
+        group = QGroupBox("NOTIFICATIONS")
         layout = QFormLayout()
+        layout.setSpacing(10)
 
-        self.enable_notifications_checkbox = QCheckBox()
-        self.enable_notifications_checkbox.setToolTip("Enable desktop notifications")
-        layout.addRow("Enable Notifications:", self.enable_notifications_checkbox)
+        self.enable_notifications_checkbox = QCheckBox("Enable desktop high-speed & speed-test alerts")
+        self.enable_notifications_checkbox.setToolTip("Enable system tray notifications")
+        layout.addRow("", self.enable_notifications_checkbox)
 
         self.notification_threshold = QSpinBox()
         self.notification_threshold.setRange(1, 10000)
         self.notification_threshold.setSuffix(" Mbps")
         self.notification_threshold.setToolTip("Speed threshold for notifications")
-        layout.addRow("Notification Threshold:", self.notification_threshold)
+        layout.addRow("Alert Threshold:", self.notification_threshold)
 
         group.setLayout(layout)
         self.layout.addWidget(group)
 
-    def create_button_box(self):
-        """Create the dialog button box."""
+    def create_button_box(self, parent_layout):
+        """Create the dialog footer button box."""
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel | QDialogButtonBox.RestoreDefaults
         )
-        self.buttons.button(QDialogButtonBox.RestoreDefaults).clicked.connect(self.restore_defaults)
+        ok_btn = self.buttons.button(QDialogButtonBox.Ok)
+        ok_btn.setText("Save Settings")
+        ok_btn.setObjectName("primaryBtn")
+        cancel_btn = self.buttons.button(QDialogButtonBox.Cancel)
+        cancel_btn.setText("Cancel")
+        restore_btn = self.buttons.button(QDialogButtonBox.RestoreDefaults)
+        restore_btn.setText("Restore Defaults")
+
+        restore_btn.clicked.connect(self.restore_defaults)
         self.buttons.accepted.connect(self.validate_and_accept)
         self.buttons.rejected.connect(self.reject)
-        self.layout.addWidget(self.buttons)
+        parent_layout.addWidget(self.buttons)
 
     def load_settings(self):
         """Load current settings into the dialog."""
@@ -304,7 +502,7 @@ Licensed under MIT""",
         self.update_url_input.setText(self.settings.update_url or "")
 
     def validate_and_accept(self):
-        """Enhanced settings validation"""
+        """Validate inputs, apply to settings, and save."""
         try:
             if not self.auto_select_checkbox.isChecked():
                 current_index = self.network_interface_combo.currentIndex()
@@ -339,7 +537,7 @@ Licensed under MIT""",
             QMessageBox.critical(self, "Settings Error", f"An unexpected error occurred:\n{str(e)}")
 
     def _update_settings(self):
-        """Update settings from UI values"""
+        """Update settings from UI values."""
         auto_select = self.auto_select_checkbox.isChecked()
         self.settings.auto_select_interface = auto_select
 
@@ -362,7 +560,7 @@ Licensed under MIT""",
         self.settings.update_url = self.update_url_input.text().strip()
 
     def save_settings(self):
-        """Save dialog values back to settings object"""
+        """Save dialog values back to settings object."""
         self._update_settings()
         self.settings.save()
 
@@ -384,7 +582,7 @@ Licensed under MIT""",
             )
 
     def start_update(self):
-        """Start the update process"""
+        """Start the update process."""
         if self.updater.check_for_updates():
             update_file = self.updater.download_update()
             if update_file:

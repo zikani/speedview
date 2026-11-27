@@ -199,9 +199,9 @@ MAIN_SVG_TEMPLATE = """
 </svg>
 """
 
-# Floating mode SVG template
+# Floating mode SVG template (compact mini widget)
 FLOATING_SVG_TEMPLATE = """
-<svg width="250" height="80" viewBox="0 0 250 80" xmlns="http://www.w3.org/2000/svg"
+<svg width="184" height="56" viewBox="0 0 184 56" xmlns="http://www.w3.org/2000/svg"
      font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
   <defs>
     <linearGradient id="darkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -215,7 +215,7 @@ FLOATING_SVG_TEMPLATE = """
     </linearGradient>
 
     <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur" />
       <feMerge>
         <feMergeNode in="blur" />
         <feMergeNode in="SourceGraphic" />
@@ -223,44 +223,44 @@ FLOATING_SVG_TEMPLATE = """
     </filter>
 
     <filter id="shadow">
-      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#2EE6A6" flood-opacity="0.22"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#2EE6A6" flood-opacity="0.20"/>
     </filter>
   </defs>
 
   <g transform="translate(0, 0)">
-    <rect width="250" height="80" rx="24" ry="24" fill="url(#darkGradient)" filter="url(#shadow)" />
-    <rect x="0.5" y="0.5" width="249" height="79" rx="23.5" ry="23.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" />
+    <rect width="184" height="56" rx="18" ry="18" fill="url(#darkGradient)" filter="url(#shadow)" />
+    <rect x="0.5" y="0.5" width="183" height="55" rx="17.5" ry="17.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.09" />
 
     <!-- Dividers -->
-    <line x1="114" y1="24" x2="114" y2="56" stroke="#FFFFFF" stroke-width="1" opacity="0.08" />
-    <line x1="172" y1="24" x2="172" y2="56" stroke="#FFFFFF" stroke-width="1" opacity="0.08" />
+    <line x1="84" y1="14" x2="84" y2="42" stroke="#FFFFFF" stroke-width="1" opacity="0.08" />
+    <line x1="121" y1="14" x2="121" y2="42" stroke="#FFFFFF" stroke-width="1" opacity="0.08" />
 
     <!-- Speed value -->
-    <text id="speedValue" x="60" y="45" font-size="26" font-weight="700" fill="url(#speedTextGradient)" text-anchor="middle" filter="url(#glow)">0.0</text>
-    <text id="speedUnit" x="60" y="65" font-size="12" font-weight="500" fill="#8FA3C9" text-anchor="middle">Mbps</text>
+    <text id="speedValue" x="50" y="33" font-size="19" font-weight="700" fill="url(#speedTextGradient)" text-anchor="middle" filter="url(#glow)">0.0</text>
+    <text id="speedUnit" x="50" y="47" font-size="9.5" font-weight="500" fill="#8FA3C9" text-anchor="middle">Mbps</text>
 
     <!-- Signal strength bars -->
-    <g transform="translate(130, 30)">
-      <rect class="signal-bar" x="0" y="10" width="5" height="10" rx="2.5" fill="#2EE6A6" opacity="0.95"/>
-      <rect class="signal-bar" x="10" y="5" width="5" height="15" rx="2.5" fill="#2EE6A6" opacity="0.95"/>
-      <rect class="signal-bar" x="20" y="0" width="5" height="20" rx="2.5" fill="#2EE6A6" opacity="0.95"/>
-      <rect class="signal-bar" x="30" y="-5" width="5" height="25" rx="2.5" fill="#2EE6A6" opacity="0.3"/>
+    <g transform="translate(92, 20)">
+      <rect class="signal-bar" x="0" y="9" width="4" height="8" rx="2" fill="#2EE6A6" opacity="0.95"/>
+      <rect class="signal-bar" x="6" y="6" width="4" height="11" rx="2" fill="#2EE6A6" opacity="0.95"/>
+      <rect class="signal-bar" x="12" y="3" width="4" height="14" rx="2" fill="#2EE6A6" opacity="0.95"/>
+      <rect class="signal-bar" x="18" y="0" width="4" height="17" rx="2" fill="#2EE6A6" opacity="0.3"/>
     </g>
 
     <!-- Real connection info -->
-    <text id="connectionType" x="195" y="38" font-size="13" font-weight="700" fill="#E6FFF6" text-anchor="middle">--</text>
-    <text id="connectionBand" x="195" y="54" font-size="10" font-weight="500" fill="#8FA3C9" text-anchor="middle"></text>
+    <text id="connectionType" x="148" y="31" font-size="10.5" font-weight="700" fill="#E6FFF6" text-anchor="middle">--</text>
+    <text id="connectionBand" x="148" y="44" font-size="8.5" font-weight="500" fill="#8FA3C9" text-anchor="middle"></text>
 
     <!-- Expand button -->
-    <g id="expandButton" class="button" transform="translate(20, 20)">
-      <circle cx="0" cy="0" r="9" fill="#FFFFFF" fill-opacity="0.06" stroke="#2EE6A6" stroke-opacity="0.55" stroke-width="1" />
-      <path d="M-3.5,0 L3.5,0 M0,-3.5 L0,3.5" stroke="#8CFFD6" stroke-width="1.6" stroke-linecap="round" />
+    <g id="expandButton" class="button" transform="translate(16, 16)">
+      <circle cx="0" cy="0" r="7.5" fill="#FFFFFF" fill-opacity="0.06" stroke="#2EE6A6" stroke-opacity="0.55" stroke-width="1" />
+      <path d="M-3,0 L3,0 M0,-3 L0,3" stroke="#8CFFD6" stroke-width="1.5" stroke-linecap="round" />
     </g>
 
-    <!-- Close button -->
-    <g id="closeButton" class="button" transform="translate(230, 20)">
-      <circle cx="0" cy="0" r="9" fill="#FFFFFF" fill-opacity="0.06" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="1" />
-      <path d="M-3.5,-3.5 L3.5,3.5 M-3.5,3.5 L3.5,-3.5" stroke="#CBD5F5" stroke-width="1.6" stroke-linecap="round" />
+    <!-- Close button (minimize to tray) -->
+    <g id="closeButton" class="button" transform="translate(168, 16)">
+      <circle cx="0" cy="0" r="7.5" fill="#FFFFFF" fill-opacity="0.06" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="1" />
+      <path d="M-2.8,-2.8 L2.8,2.8 M-2.8,2.8 L2.8,-2.8" stroke="#CBD5F5" stroke-width="1.5" stroke-linecap="round" />
     </g>
   </g>
 </svg>

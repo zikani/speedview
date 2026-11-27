@@ -29,7 +29,7 @@ class DataUsageDialog(QWidget):
 
     def setup_ui(self):
         self.setWindowTitle("SpeedView - Data Usage")
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")
         self.setFixedSize(520, 480)
@@ -116,6 +116,12 @@ class DataUsageDialog(QWidget):
     def mouseReleaseEvent(self, event):
         self.dragging = False
         event.accept()
+
+    def showEvent(self, event):
+        if not self.refresh_timer.isActive():
+            self.refresh_timer.start(2000)
+        self.refresh_display()
+        super().showEvent(event)
 
     def closeEvent(self, event):
         self.refresh_timer.stop()

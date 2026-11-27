@@ -42,10 +42,22 @@ class UpdateDialog(QDialog):
 
     def init_ui(self):
         self.setWindowTitle("Software Update")
-        self.setFixedSize(400, 160)
+        self.setFixedSize(420, 180)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        self.setAutoFillBackground(True)
+        self.setStyleSheet(
+            "QDialog { background-color: #0B1220; color: #F2F6FF; font-family: Inter, 'Segoe UI', Arial, sans-serif; }"
+            "QLabel { color: #CBD5F5; font-size: 13px; }"
+            "QProgressBar { background-color: #111B2E; border: 1px solid #243656; border-radius: 6px; text-align: center; color: #F2F6FF; }"
+            "QProgressBar::chunk { background-color: #22D3EE; border-radius: 5px; }"
+            "QPushButton { background-color: #2563EB; color: #FFFFFF; border: none; border-radius: 8px; padding: 8px 16px; font-weight: 700; }"
+            "QPushButton:hover { background-color: #3B82F6; }"
+        )
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
 
         self.status_label = QLabel("Checking for updates...")
         self.status_label.setWordWrap(True)

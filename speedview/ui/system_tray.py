@@ -126,5 +126,8 @@ class SystemTray:
 
     def quit_application(self):
         """Clean up and quit the application."""
+        if hasattr(self.main_window, "force_quit"):
+            self.main_window.force_quit()
+            return
         self.tray_icon.hide()
         QApplication.quit()

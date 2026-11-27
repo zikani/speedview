@@ -49,6 +49,11 @@ class MainWindow(QWidget):
         self.drag_position = QPoint()
         self.last_speeds = (0.0, 0.0)
         self._last_threshold_alert = 0.0
+        self._force_quit = False
+
+        app = QApplication.instance()
+        if app is not None:
+            app.setQuitOnLastWindowClosed(False)
 
         self.setup_ui()
         self.setup_connections()
@@ -74,7 +79,7 @@ class MainWindow(QWidget):
         self.setWindowTitle("SpeedView - Network Monitor")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setStyleSheet("background: transparent;")
+        self.setStyleSheet("MainWindow { background: transparent; }")
         self.setFixedSize(500, 500)
         apply_rounded_mask(self, 0, 0, 500, 500, radius=28)
 
@@ -127,6 +132,18 @@ class MainWindow(QWidget):
             self.tray = SystemTray(self)
             if hasattr(self.tray, 'show'):
                 self.tray.show()
+
+    def ensure_tray_visible(self):
+        """Ensure a system tray icon is initialized and visible for background operation."""
+        if self.tray is None:
+            self.tray = SystemTray(self)
+        if hasattr(self.tray, 'show'):
+            self.tray.show()
+
+    def minimize_to_tray(self):
+        """Minimize MainWindow directly to the system tray."""
+        self.ensure_tray_visible()
+        self.hide()
 
     def on_bytes_transferred(self, delta_recv, delta_sent):
         """Persist real byte deltas to DataUsageTracker and refresh open DataUsageDialog."""
@@ -245,10 +262,10 @@ class MainWindow(QWidget):
         svg_y = pos.y() * (500.0 / widget_height)
         logging.info(f"SVG clicked at widget ({pos.x()}, {pos.y()}) mapped to SVG ({svg_x:.1f}, {svg_y:.1f})")
 
-        # Minimize button (442, 24) r=10
+        # Minimize button (442, 24) -> minimize to tray
         if ((svg_x - 442) ** 2 + (svg_y - 24) ** 2) <= 144:
-            self.showMinimized()
-        # Close button (472, 24) r=10
+            self.minimize_to_tray()
+        # Close button (472, 24) -> switch to float widget
         elif ((svg_x - 472) ** 2 + (svg_y - 24) ** 2) <= 144:
             self.close()
         # Test Network button (175..325, 400..440)
@@ -260,9 +277,9 @@ class MainWindow(QWidget):
         # Float button (50..150, 400..440)
         elif 50 <= svg_x <= 150 and 400 <= svg_y <= 440:
             self.toggle_float_mode()
-        # Usage button (350..450, 400..440)
+        # Usage button (350..450, 400..440) -> open Data Usage & close MainWindow
         elif 350 <= svg_x <= 450 and 400 <= svg_y <= 440:
-            self.open_data_usage()
+            self.open_data_usage(close_main=True)
         else:
             self.is_dragging = True
             self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
@@ -301,15 +318,18 @@ class MainWindow(QWidget):
         if self.floating_window is not None:
             self.floating_window.update_display()
 
-    def open_data_usage(self):
+    def open_data_usage(self, close_main=False):
         """Open the SVG Data Usage window showing App | Data | Date and Daily/Monthly totals."""
         if self._usage_dialog is None:
-            self._usage_dialog = DataUsageDialog(tracker=self.data_usage_tracker, parent=self)
+            self._usage_dialog = DataUsageDialog(tracker=self.data_usage_tracker, parent=None)
         else:
             self._usage_dialog.refresh_display()
         self._usage_dialog.show()
         self._usage_dialog.raise_()
         self._usage_dialog.activateWindow()
+        if close_main:
+            self.ensure_tray_visible()
+            self.hide()
 
     def show_history(self):
         """Alias for open_data_usage."""
@@ -427,8 +447,10 @@ class MainWindow(QWidget):
             self.show()
 
     def _on_floating_closed(self):
+        """When Float widget is closed, minimize to tray and keep running in background."""
         self.floating_window = None
         self.settings.is_floating = False
+        self.ensure_tray_visible()
 
     def _on_floating_expand(self):
         self.settings.is_floating = False
@@ -442,8 +464,16 @@ class MainWindow(QWidget):
         if self.settings.is_floating:
             self.hide()
 
+    def force_quit(self):
+        """Explicitly shut down background monitoring and exit the application."""
+        self._force_quit = True
+        self.close()
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
+
     def closeEvent(self, event):
-        """Handle window close event using live settings"""
+        """Closing MainWindow switches to the Float widget instead of quitting, unless force_quit."""
         self.settings.window_size = [self.width(), self.height()]
         self.settings.window_position = [self.x(), self.y()]
         try:
@@ -451,20 +481,23 @@ class MainWindow(QWidget):
         except Exception as e:
             logging.warning(f"Could not save settings on close: {e}")
 
-        should_hide_to_tray = (self.settings.close_to_tray or self.settings.minimize_to_tray) and self.tray is not None
-        if should_hide_to_tray:
+        if not self._force_quit:
             event.ignore()
-            self.hide()
-        else:
-            if hasattr(self, 'connection_timer'):
-                self.connection_timer.stop()
-            if self.tray is not None and hasattr(self.tray, 'hide'):
-                self.tray.hide()
-            if self.floating_window:
-                self.floating_window.close()
-            if self._usage_dialog:
-                self._usage_dialog.close()
-            event.accept()
+            self.ensure_tray_visible()
+            self.toggle_float_mode(force=True)
+            return
+
+        if hasattr(self, 'connection_timer'):
+            self.connection_timer.stop()
+        if self.tray is not None and hasattr(self.tray, 'hide'):
+            self.tray.hide()
+        if self.floating_window:
+            self.floating_window.close()
+        if self._usage_dialog:
+            self._usage_dialog.close()
+        if self._test_dialog:
+            self._test_dialog.close()
+        event.accept()
 
     def check_for_updates(self):
         """Check for software updates"""

@@ -178,6 +178,60 @@ class TestSettingsAndDetection(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+    def test_window_lifecycle_and_settings_theme(self):
+        from PyQt5.QtCore import Qt
+        from speedview.ui.main_window import MainWindow
+
+        class DummyTray:
+            def __init__(self, *args, **kwargs):
+                self.shown = False
+            def show(self):
+                self.shown = True
+            def hide(self):
+                self.shown = False
+            def update_tray_icon(self, *args, **kwargs):
+                pass
+
+        settings = Settings()
+        settings.start_minimized = False
+        settings.is_floating = False
+
+        mw = MainWindow(settings=settings)
+        mw.tray = DummyTray()
+        mw.show()
+
+        # 1. Minimize -> hides main window to tray
+        mw.minimize_to_tray()
+        self.assertFalse(mw.isVisible())
+        self.assertTrue(mw.tray.shown)
+
+        # 2. Close MainWindow -> opens compact Float widget (184x56) and hides MainWindow
+        mw.show()
+        mw.close()
+        self.assertIsNotNone(mw.floating_window)
+        self.assertEqual((mw.floating_window.width(), mw.floating_window.height()), (184, 56))
+        self.assertFalse(mw.isVisible())
+
+        # 3. Close Float widget -> stays minimized in tray (background)
+        mw.floating_window.close()
+        self.assertIsNone(mw.floating_window)
+        self.assertFalse(mw.isVisible())
+
+        # 4. Usage button -> opens DataUsageDialog and closes/hides MainWindow
+        mw.show()
+        mw.open_data_usage(close_main=True)
+        self.assertFalse(mw.isVisible())
+        self.assertIsNotNone(mw._usage_dialog)
+        self.assertTrue(mw._usage_dialog.isVisible())
+
+        # 5. SettingsDialog does NOT inherit MainWindow transparent background
+        dlg = SettingsDialog(parent=mw, settings=settings)
+        self.assertFalse(dlg.testAttribute(Qt.WA_TranslucentBackground))
+        self.assertIn("#0B1220", dlg.styleSheet())
+        dlg.close()
+
+        mw.force_quit()
+
 
 if __name__ == '__main__':
     unittest.main()

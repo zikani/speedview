@@ -41,8 +41,8 @@ class FloatingWindow(QWidget):
     def setup_ui(self):
         """Initialize the UI components"""
         self.setWindowTitle("SpeedView - Floating Mode")
-        self.setFixedSize(250, 80)
-        apply_rounded_mask(self, 0, 0, 250, 80, radius=24)
+        self.setFixedSize(184, 56)
+        apply_rounded_mask(self, 0, 0, 184, 56, radius=18)
 
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -113,17 +113,17 @@ class FloatingWindow(QWidget):
             pos = event.pos()
             widget_width = max(1, self.svg_widget.width())
             widget_height = max(1, self.svg_widget.height())
-            svg_x = pos.x() * (250.0 / widget_width)
-            svg_y = pos.y() * (80.0 / widget_height)
+            svg_x = pos.x() * (184.0 / widget_width)
+            svg_y = pos.y() * (56.0 / widget_height)
 
-            # Close button at (230, 20) radius 8
-            if (svg_x - 230) ** 2 + (svg_y - 20) ** 2 <= 64:
+            # Close button at (168, 16) -> minimize to tray
+            if (svg_x - 168) ** 2 + (svg_y - 16) ** 2 <= 100:
                 self.close()
                 event.accept()
                 return
 
-            # Expand button at (20, 20) radius 8
-            if (svg_x - 20) ** 2 + (svg_y - 20) ** 2 <= 64:
+            # Expand button at (16, 16) -> expand back to main window
+            if (svg_x - 16) ** 2 + (svg_y - 16) ** 2 <= 100:
                 self.settings.is_floating = False
                 self.expand_requested.emit()
                 self.close()

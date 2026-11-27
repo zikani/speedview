@@ -254,37 +254,39 @@ def update_svg_signal_strength(svg_content, strength):
 
 
 def update_floating_svg(svg_template, speed, signal_strength, connection_type, band, speed_unit="Mbps"):
-    """Update the floating window SVG with real values."""
+    """Update the compact 184x56 floating window SVG with real values."""
     display_speed = convert_speed(speed, speed_unit)
     speed_str = f"{display_speed:.0f}" if speed_unit == "Kbps" and display_speed >= 100 else f"{display_speed:.1f}"
 
     updated_svg = re.sub(
         r'<text id="speedValue".*?>.*?</text>',
-        f'<text id="speedValue" x="60" y="45" font-size="26" font-weight="700" '
+        f'<text id="speedValue" x="50" y="33" font-size="19" font-weight="700" '
         f'fill="url(#speedTextGradient)" text-anchor="middle" filter="url(#glow)">{speed_str}</text>',
         svg_template,
     )
 
     updated_svg = re.sub(
         r'<text id="speedUnit".*?>.*?</text>',
-        f'<text id="speedUnit" x="60" y="65" font-size="12" font-weight="500" fill="#8FA3C9" text-anchor="middle">{escape(speed_unit)}</text>',
+        f'<text id="speedUnit" x="50" y="47" font-size="9.5" font-weight="500" fill="#8FA3C9" text-anchor="middle">{escape(speed_unit)}</text>',
         updated_svg,
     )
 
     safe_type = escape(str(connection_type or "--"))
+    if len(safe_type) > 10:
+        safe_type = safe_type[:9] + "…"
     safe_band = escape(str(band or ""))
-    if len(safe_band) > 22:
-        safe_band = safe_band[:21] + "…"
+    if len(safe_band) > 13:
+        safe_band = safe_band[:12] + "…"
 
     updated_svg = re.sub(
         r'<text id="connectionType".*?>.*?</text>',
-        f'<text id="connectionType" x="195" y="38" font-size="13" font-weight="700" fill="#E6FFF6" text-anchor="middle">{safe_type}</text>',
+        f'<text id="connectionType" x="148" y="31" font-size="10.5" font-weight="700" fill="#E6FFF6" text-anchor="middle">{safe_type}</text>',
         updated_svg,
     )
 
     updated_svg = re.sub(
         r'<text id="connectionBand".*?>.*?</text>',
-        f'<text id="connectionBand" x="195" y="54" font-size="10" font-weight="500" fill="#8FA3C9" text-anchor="middle">{safe_band}</text>',
+        f'<text id="connectionBand" x="148" y="44" font-size="8.5" font-weight="500" fill="#8FA3C9" text-anchor="middle">{safe_band}</text>',
         updated_svg,
     )
 
@@ -306,16 +308,16 @@ def update_floating_svg(svg_template, speed, signal_strength, connection_type, b
     opacities = ["0.95" if i < filled_bars else "0.6" for i in range(4)]
 
     signal_replacement = (
-        '<g transform="translate(130, 30)">\n'
-        f'      <rect class="signal-bar" x="0" y="10" width="5" height="10" rx="2.5" fill="{fills[0]}" opacity="{opacities[0]}"/>\n'
-        f'      <rect class="signal-bar" x="10" y="5" width="5" height="15" rx="2.5" fill="{fills[1]}" opacity="{opacities[1]}"/>\n'
-        f'      <rect class="signal-bar" x="20" y="0" width="5" height="20" rx="2.5" fill="{fills[2]}" opacity="{opacities[2]}"/>\n'
-        f'      <rect class="signal-bar" x="30" y="-5" width="5" height="25" rx="2.5" fill="{fills[3]}" opacity="{opacities[3]}"/>\n'
+        '<g transform="translate(92, 20)">\n'
+        f'      <rect class="signal-bar" x="0" y="9" width="4" height="8" rx="2" fill="{fills[0]}" opacity="{opacities[0]}"/>\n'
+        f'      <rect class="signal-bar" x="6" y="6" width="4" height="11" rx="2" fill="{fills[1]}" opacity="{opacities[1]}"/>\n'
+        f'      <rect class="signal-bar" x="12" y="3" width="4" height="14" rx="2" fill="{fills[2]}" opacity="{opacities[2]}"/>\n'
+        f'      <rect class="signal-bar" x="18" y="0" width="4" height="17" rx="2" fill="{fills[3]}" opacity="{opacities[3]}"/>\n'
         '    </g>'
     )
 
     updated_svg = re.sub(
-        r'<g transform="translate\(130, 30\)">.*?</g>',
+        r'<g transform="translate\((?:130, 30|92, 20)\)">.*?</g>',
         signal_replacement,
         updated_svg,
         flags=re.DOTALL,
