@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QShortcut
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt, QTimer, QByteArray, pyqtSignal
 from PyQt5.QtGui import QKeySequence
-from speedview.utils.svg_utils import update_floating_svg
+from speedview.utils.svg_utils import apply_rounded_mask, update_floating_svg
 from speedview.ui.resources.svg_templates import FLOATING_SVG_TEMPLATE
 
 
@@ -34,17 +34,21 @@ class FloatingWindow(QWidget):
 
         self.update_display()
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setStyleSheet("background: transparent;")
 
     def setup_ui(self):
         """Initialize the UI components"""
         self.setWindowTitle("SpeedView - Floating Mode")
         self.setFixedSize(250, 80)
+        apply_rounded_mask(self, 0, 0, 250, 80, radius=15)
 
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
 
         self.svg_widget = QSvgWidget()
+        self.svg_widget.setStyleSheet("background: transparent;")
         self.layout.addWidget(self.svg_widget)
         self.svg_widget.mousePressEvent = self.handle_svg_mouse_press
 

@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QShortcut, QApplication
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt, QByteArray
 from PyQt5.QtGui import QKeySequence
-from speedview.utils.svg_utils import update_test_network_svg
+from speedview.utils.svg_utils import apply_rounded_mask, update_test_network_svg
 from speedview.ui.resources.svg_templates import TEST_NETWORK_SVG
 
 
@@ -30,13 +30,17 @@ class TestNetworkDialog(QWidget):
         """Initialize UI components"""
         self.setWindowTitle("Network Test")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setStyleSheet("background: transparent;")
         self.setFixedSize(300, 340)
+        apply_rounded_mask(self, 10, 10, 280, 320, radius=10)
 
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
 
         self.svg_widget = QSvgWidget()
+        self.svg_widget.setStyleSheet("background: transparent;")
         self.layout.addWidget(self.svg_widget)
         self.svg_widget.mousePressEvent = self.handle_svg_mouse_press
         self.update_display()

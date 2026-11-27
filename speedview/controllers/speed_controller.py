@@ -11,6 +11,7 @@ class SpeedController(QObject):
 
     speed_updated = pyqtSignal(float, float)  # Download speed, Upload speed (Mbps)
     test_completed = pyqtSignal(float, float)  # Speed test download, upload (Mbps)
+    bytes_transferred = pyqtSignal(int, int)  # delta_recv, delta_sent (bytes)
 
     def __init__(self, settings):
         super().__init__()
@@ -64,6 +65,8 @@ class SpeedController(QObject):
                 self.last_download_speed = download_speed
                 self.last_upload_speed = upload_speed
                 self.speed_updated.emit(download_speed, upload_speed)
+                if delta_recv > 0 or delta_sent > 0:
+                    self.bytes_transferred.emit(delta_recv, delta_sent)
 
             self.prev_bytes_recv = bytes_recv
             self.prev_bytes_sent = bytes_sent

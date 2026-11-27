@@ -7,6 +7,17 @@ from xml.sax.saxutils import escape
 from speedview.config.config import TEMP_SVG_FILE
 
 
+def apply_rounded_mask(widget, x=0, y=0, width=None, height=None, radius=15):
+    """Clip a frameless widget to its rounded SVG card bounds (works with or without compositor)."""
+    from PyQt5.QtGui import QPainterPath, QRegion
+    w = width if width is not None else widget.width()
+    h = height if height is not None else widget.height()
+    path = QPainterPath()
+    path.addRoundedRect(float(x), float(y), float(w), float(h), float(radius), float(radius))
+    region = QRegion(path.toFillPolygon().toPolygon())
+    widget.setMask(region)
+
+
 def convert_speed(speed_mbps, unit="Mbps"):
     """Convert speed from Mbps to requested display unit."""
     val = max(0.0, float(speed_mbps or 0.0))
@@ -295,6 +306,79 @@ def update_floating_svg(svg_template, speed, signal_strength, connection_type, b
     )
 
     return updated_svg
+
+
+def update_data_usage_svg(svg_template, daily_total_str, monthly_total_str, rows, mode="daily"):
+    """Update DATA_USAGE_SVG_TEMPLATE with real daily/monthly totals and App | Data | Date rows."""
+    from speedview.models.data_usage import format_bytes
+
+    subtitle = "Daily Breakdown" if mode == "daily" else "Monthly Breakdown"
+    updated = re.sub(
+        r'<text id="usageModeSubtitle".*?>.*?</text>',
+        f'<text id="usageModeSubtitle" x="158" y="34" font-family="Arial, sans-serif" font-size="12" fill="#88D8E6" opacity="0.8">{subtitle}</text>',
+        svg_template,
+    )
+    updated = re.sub(
+        r'<text id="dailyTotal".*?>.*?</text>',
+        f'<text id="dailyTotal" x="44" y="102" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#00F0FF">{escape(str(daily_total_str))}</text>',
+        updated,
+    )
+    updated = re.sub(
+        r'<text id="monthlyTotal".*?>.*?</text>',
+        f'<text id="monthlyTotal" x="284" y="102" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#00FFAA">{escape(str(monthly_total_str))}</text>',
+        updated,
+    )
+
+    daily_fill = "url(#usageBtnGradient)" if mode == "daily" else "#18222D"
+    daily_stroke = "#00F0FF" if mode == "daily" else "#2D4A63"
+    daily_text = "#FFFFFF" if mode == "daily" else "#88D8E6"
+
+    monthly_fill = "url(#usageBtnGradient)" if mode == "monthly" else "#18222D"
+    monthly_stroke = "#00F0FF" if mode == "monthly" else "#2D4A63"
+    monthly_text = "#FFFFFF" if mode == "monthly" else "#88D8E6"
+
+    tabs_block = (
+        '<g id="usageTabs">\n'
+        f'    <rect id="dailyTabRect" x="28" y="130" width="105" height="30" rx="15" fill="{daily_fill}" stroke="{daily_stroke}" stroke-width="1"/>\n'
+        f'    <text x="80.5" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="{daily_text}">DAILY</text>\n'
+        f'    <rect id="monthlyTabRect" x="143" y="130" width="115" height="30" rx="15" fill="{monthly_fill}" stroke="{monthly_stroke}" stroke-width="1"/>\n'
+        f'    <text x="200.5" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="{monthly_text}">MONTHLY</text>\n'
+        '    <rect id="resetUsageRect" x="392" y="130" width="100" height="30" rx="15" fill="#241519" stroke="#FF5050" stroke-width="1"/>\n'
+        '    <text x="442" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#FF8080">RESET</text>\n'
+        '  </g>'
+    )
+    updated = re.sub(r'<g id="usageTabs">.*?</g>', tabs_block, updated, flags=re.DOTALL)
+
+    row_elements = []
+    if not rows:
+        row_elements.append(
+            '<text x="260" y="308" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#778899">'
+            'No network app traffic recorded for this period yet.</text>'
+        )
+    else:
+        max_bytes = max(1, max(r.get("bytes", 0) for r in rows[:7]))
+        for idx, row in enumerate(rows[:7]):
+            y_top = 208 + idx * 29
+            y_text = y_top + 17
+            app_name = str(row.get("app", "Unknown"))
+            if len(app_name) > 22:
+                app_name = app_name[:21] + "…"
+            data_str = format_bytes(row.get("bytes", 0))
+            date_str = str(row.get("date", ""))
+            bar_w = max(4.0, (row.get("bytes", 0) / max_bytes) * 165.0)
+            bg_fill = "#121B26" if idx % 2 == 0 else "#0E141C"
+
+            row_elements.append(
+                f'    <rect x="34" y="{y_top}" width="452" height="25" rx="4" fill="{bg_fill}"/>\n'
+                f'    <rect x="46" y="{y_top + 21}" width="{bar_w:.1f}" height="2" rx="1" fill="url(#usageArcGradient)" opacity="0.75"/>\n'
+                f'    <text x="46" y="{y_text}" font-family="Arial, sans-serif" font-size="12" fill="#E6F7FF">{escape(app_name)}</text>\n'
+                f'    <text x="332" y="{y_text}" text-anchor="end" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#00F0FF">{escape(data_str)}</text>\n'
+                f'    <text x="474" y="{y_text}" text-anchor="end" font-family="Arial, sans-serif" font-size="11" fill="#88A4B8">{escape(date_str)}</text>'
+            )
+
+    rows_block = '<g id="usageRows">\n' + "\n".join(row_elements) + '\n  </g>'
+    updated = re.sub(r'<g id="usageRows">.*?</g>', rows_block, updated, flags=re.DOTALL)
+    return updated
 
 
 def save_svg_to_file(svg_content):

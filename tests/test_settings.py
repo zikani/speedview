@@ -1,11 +1,25 @@
+import os
 import sys
+import tempfile
 import unittest
 from PyQt5.QtWidgets import QApplication
 from speedview.models.settings import Settings
+from speedview.models.data_usage import DataUsageTracker, format_bytes
 from speedview.ui.settings_dialog import SettingsDialog
+from speedview.ui.data_usage_dialog import DataUsageDialog
 from speedview.controllers.network_controller import NetworkController
-from speedview.utils.svg_utils import update_svg_speed, update_test_network_svg, update_floating_svg
-from speedview.ui.resources.svg_templates import MAIN_SVG_TEMPLATE, TEST_NETWORK_SVG, FLOATING_SVG_TEMPLATE
+from speedview.utils.svg_utils import (
+    update_svg_speed,
+    update_test_network_svg,
+    update_floating_svg,
+    update_data_usage_svg,
+)
+from speedview.ui.resources.svg_templates import (
+    MAIN_SVG_TEMPLATE,
+    TEST_NETWORK_SVG,
+    FLOATING_SVG_TEMPLATE,
+    DATA_USAGE_SVG_TEMPLATE,
+)
 
 
 class TestSettingsAndDetection(unittest.TestCase):
@@ -36,6 +50,9 @@ class TestSettingsAndDetection(unittest.TestCase):
         self.assertIsInstance(detail, str)
 
     def test_svg_updates_in_memory(self):
+        self.assertIn("USAGE", MAIN_SVG_TEMPLATE)
+        self.assertNotIn("HISTORY", MAIN_SVG_TEMPLATE)
+
         main_svg = update_svg_speed(MAIN_SVG_TEMPLATE, speed=25.0, max_speed=100, speed_unit="Mbps")
         self.assertIn("25.00", main_svg)
         self.assertIn("Mbps", main_svg)
@@ -49,6 +66,36 @@ class TestSettingsAndDetection(unittest.TestCase):
         self.assertIn("12.3", float_svg)
         self.assertIn("Ethernet", float_svg)
         self.assertIn("1000 Mbps", float_svg)
+
+    def test_data_usage_tracker_and_svg_dialog(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "usage.db")
+            tracker = DataUsageTracker(db_path=db_path)
+            tracker.record_traffic(1024 * 1024, 512 * 1024)
+
+            daily_total, daily_rows = tracker.get_daily_usage()
+            monthly_total, monthly_rows = tracker.get_monthly_usage()
+            self.assertEqual(daily_total, 1536 * 1024)
+            self.assertEqual(monthly_total, 1536 * 1024)
+            self.assertGreaterEqual(len(daily_rows), 1)
+            self.assertIn("app", daily_rows[0])
+            self.assertIn("bytes", daily_rows[0])
+            self.assertIn("date", daily_rows[0])
+
+            svg_out = update_data_usage_svg(
+                DATA_USAGE_SVG_TEMPLATE,
+                format_bytes(daily_total),
+                format_bytes(monthly_total),
+                daily_rows,
+                mode="daily",
+            )
+            self.assertIn("1.50 MB", svg_out)
+            self.assertIn(daily_rows[0]["app"][:10], svg_out)
+
+            dlg = DataUsageDialog(tracker=tracker)
+            dlg.show()
+            self.assertTrue(dlg.isVisible())
+            dlg.close()
 
 
 if __name__ == '__main__':

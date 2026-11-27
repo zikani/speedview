@@ -6,8 +6,6 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QShortcut,
     QApplication,
-    QAction,
-    QMenuBar,
 )
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt, QTimer, QPoint, QByteArray
@@ -18,7 +16,9 @@ from speedview.ui.settings_dialog import SettingsDialog
 from speedview.ui.system_tray import SystemTray
 from speedview.ui.floating_window import FloatingWindow
 from speedview.ui.test_network_dialog import TestNetworkDialog
+from speedview.ui.data_usage_dialog import DataUsageDialog
 from speedview.utils.svg_utils import (
+    apply_rounded_mask,
     update_svg_speed,
     update_svg_connection_status,
     update_svg_signal_strength,
@@ -26,19 +26,22 @@ from speedview.utils.svg_utils import (
 from speedview.controllers.network_controller import NetworkController
 from speedview.controllers.speed_controller import SpeedController
 from speedview.models.settings import Settings
+from speedview.models.data_usage import DataUsageTracker
 from .update_dialog import UpdateDialog
 
 
 class MainWindow(QWidget):
-    def __init__(self, settings=None, speed_controller=None, network_controller=None):
+    def __init__(self, settings=None, speed_controller=None, network_controller=None, data_usage_tracker=None):
         super().__init__()
         self.settings = settings or Settings()
         self.speed_controller = speed_controller or SpeedController(self.settings)
         self.network_controller = network_controller or NetworkController(
             selected_interface=self.settings.selected_interface
         )
+        self.data_usage_tracker = data_usage_tracker or DataUsageTracker()
         self.floating_window = None
         self._test_dialog = None
+        self._usage_dialog = None
         self.tray = None
 
         self.is_dragging = False
@@ -50,7 +53,6 @@ class MainWindow(QWidget):
         self.setup_shortcuts()
         self.init_system_tray()
 
-        # Trigger initial real interface check and periodic refresh (every 5s)
         if hasattr(self.network_controller, 'check_connection_status'):
             self.network_controller.check_connection_status()
             self.connection_timer = QTimer(self)
@@ -65,24 +67,22 @@ class MainWindow(QWidget):
             self.hide()
 
     def setup_ui(self):
-        """Initialize the user interface"""
+        """Initialize the frameless translucent SVG user interface (no menu bar or box background)."""
         logging.info("Starting setup_ui in MainWindow...")
         self.setWindowTitle("SpeedView - Network Monitor")
-        self.setFixedSize(500, 524)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setStyleSheet("background: transparent;")
+        self.setFixedSize(500, 500)
+        apply_rounded_mask(self, 0, 0, 500, 500, radius=15)
 
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
         self.setLayout(self.layout)
 
-        menu_bar = QMenuBar(self)
-        help_menu = menu_bar.addMenu("Help")
-        check_updates_action = QAction("Check for Updates", self)
-        check_updates_action.triggered.connect(self.check_for_updates)
-        help_menu.addAction(check_updates_action)
-        self.layout.setMenuBar(menu_bar)
-
         self.svg_widget = QSvgWidget()
+        self.svg_widget.setStyleSheet("background: transparent;")
         self.layout.addWidget(self.svg_widget)
         self.svg_widget.mousePressEvent = self.handle_svg_click
 
@@ -95,8 +95,16 @@ class MainWindow(QWidget):
     def setup_connections(self):
         """Connect signals and slots"""
         self.speed_controller.speed_updated.connect(self.update_speed_display)
-        if hasattr(self.speed_controller, 'test_completed'):
-            self.speed_controller.test_completed.connect(self.on_speed_test_complete)
+        try:
+            if hasattr(self.speed_controller, 'bytes_transferred'):
+                self.speed_controller.bytes_transferred.connect(self.on_bytes_transferred)
+        except RuntimeError:
+            pass
+        try:
+            if hasattr(self.speed_controller, 'test_completed'):
+                self.speed_controller.test_completed.connect(self.on_speed_test_complete)
+        except RuntimeError:
+            pass
         if hasattr(self.network_controller, 'connection_updated'):
             self.network_controller.connection_updated.connect(self.on_connection_updated)
         if hasattr(self.network_controller, 'signal_strength_updated'):
@@ -107,7 +115,8 @@ class MainWindow(QWidget):
         QShortcut(QKeySequence("Ctrl+S"), self, self.open_settings)
         QShortcut(QKeySequence("Ctrl+T"), self, self.test_network)
         QShortcut(QKeySequence("Ctrl+F"), self, self.toggle_float_mode)
-        QShortcut(QKeySequence("Ctrl+H"), self, self.show_history)
+        QShortcut(QKeySequence("Ctrl+U"), self, self.open_data_usage)
+        QShortcut(QKeySequence("Ctrl+H"), self, self.open_data_usage)
         QShortcut(QKeySequence("Esc"), self, self.hide_if_floating)
 
     def init_system_tray(self):
@@ -116,6 +125,10 @@ class MainWindow(QWidget):
             self.tray = SystemTray(self)
             if hasattr(self.tray, 'show'):
                 self.tray.show()
+
+    def on_bytes_transferred(self, delta_recv, delta_sent):
+        """Persist real byte deltas to DataUsageTracker."""
+        self.data_usage_tracker.record_traffic(delta_recv, delta_sent)
 
     def _get_real_connection_info(self):
         selected = getattr(self.settings, 'selected_interface', None)
@@ -187,11 +200,9 @@ class MainWindow(QWidget):
         self._render_svg(download_speed, upload_speed)
 
     def on_connection_updated(self, status=None, strength=None):
-        """Slot for connection status changes."""
         self.update_display()
 
     def on_signal_strength_updated(self, strength):
-        """Slot for signal strength changes."""
         self.update_display()
 
     def update_connection_display(self):
@@ -201,7 +212,9 @@ class MainWindow(QWidget):
         self.update_display()
 
     def handle_svg_click(self, event: QMouseEvent):
-        """Map widget coordinates to 500x500 SVG viewBox and handle interactive buttons."""
+        """Map widget coordinates to 500x500 SVG viewBox, handle buttons, or drag frameless window."""
+        if event.button() != Qt.LeftButton:
+            return
         pos = event.pos()
         widget_width = max(1, self.svg_widget.width())
         widget_height = max(1, self.svg_widget.height())
@@ -209,14 +222,36 @@ class MainWindow(QWidget):
         svg_y = pos.y() * (500.0 / widget_height)
         logging.info(f"SVG clicked at widget ({pos.x()}, {pos.y()}) mapped to SVG ({svg_x:.1f}, {svg_y:.1f})")
 
-        if 175 <= svg_x <= 325 and 400 <= svg_y <= 440:
+        # Minimize button (442, 24) r=10
+        if ((svg_x - 442) ** 2 + (svg_y - 24) ** 2) <= 144:
+            self.showMinimized()
+        # Close button (472, 24) r=10
+        elif ((svg_x - 472) ** 2 + (svg_y - 24) ** 2) <= 144:
+            self.close()
+        # Test Network button (175..325, 400..440)
+        elif 175 <= svg_x <= 325 and 400 <= svg_y <= 440:
             self.test_network()
+        # Settings icon (450, 80) r=20
         elif ((svg_x - 450) ** 2 + (svg_y - 80) ** 2) <= 400:
             self.open_settings()
+        # Float button (50..150, 400..440)
         elif 50 <= svg_x <= 150 and 400 <= svg_y <= 440:
             self.toggle_float_mode()
+        # Usage button (350..450, 400..440)
         elif 350 <= svg_x <= 450 and 400 <= svg_y <= 440:
-            self.show_history()
+            self.open_data_usage()
+        else:
+            self.is_dragging = True
+            self.drag_position = event.globalPos() - self.frameGeometry().topLeft()
+        event.accept()
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self.is_dragging and event.buttons() & Qt.LeftButton:
+            self.move(event.globalPos() - self.drag_position)
+            event.accept()
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        self.is_dragging = False
         event.accept()
 
     def open_settings(self):
@@ -240,6 +275,20 @@ class MainWindow(QWidget):
             self.tray = None
 
         self.update_display()
+
+    def open_data_usage(self):
+        """Open the SVG Data Usage window showing App | Data | Date and Daily/Monthly totals."""
+        if self._usage_dialog is None:
+            self._usage_dialog = DataUsageDialog(tracker=self.data_usage_tracker, parent=self)
+        else:
+            self._usage_dialog.refresh_display()
+        self._usage_dialog.show()
+        self._usage_dialog.raise_()
+        self._usage_dialog.activateWindow()
+
+    def show_history(self):
+        """Alias for open_data_usage."""
+        self.open_data_usage()
 
     def test_network(self):
         """Start a network speed test with visual SVG dialog"""
@@ -360,21 +409,14 @@ class MainWindow(QWidget):
                 self.tray.hide()
             if self.floating_window:
                 self.floating_window.close()
+            if self._usage_dialog:
+                self._usage_dialog.close()
             event.accept()
 
     def check_for_updates(self):
         """Check for software updates"""
         update_dialog = UpdateDialog(self, settings=self.settings)
         update_dialog.exec_()
-
-    def show_history(self):
-        """Show speed test history"""
-        logging.info("Showing speed test history")
-        QMessageBox.information(
-            self,
-            "Speed Test History",
-            "Speed test history feature will be implemented in a future update.",
-        )
 
 
 if __name__ == "__main__":

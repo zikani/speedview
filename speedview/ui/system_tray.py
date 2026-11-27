@@ -18,6 +18,7 @@ class SystemTray:
         actions = [
             ("Show", self.show_window),
             ("Float Mode", self.main_window.toggle_float_mode),
+            ("Data Usage", self.main_window.open_data_usage),
             ("Settings", self.main_window.open_settings),
             ("Test Network", self.main_window.test_network),
             ("Exit", self.quit_application),

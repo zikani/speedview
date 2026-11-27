@@ -100,6 +100,16 @@ MAIN_SVG_TEMPLATE = """
     <text id="speedType" x="250" y="362" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#00F0FF" opacity="0.65">Download</text>
   </g>
 
+  <!-- Window controls (minimize & close for frameless card) -->
+  <g id="minimizeWindowBtn" class="interactive-button" opacity="0.85">
+    <circle cx="442" cy="24" r="10" fill="#181818" stroke="#00F0FF" stroke-width="1.2"/>
+    <line x1="437" y1="24" x2="447" y2="24" stroke="#00F0FF" stroke-width="1.8" stroke-linecap="round"/>
+  </g>
+  <g id="closeWindowBtn" class="interactive-button" opacity="0.85">
+    <circle cx="472" cy="24" r="10" fill="#181818" stroke="#FF5050" stroke-width="1.2"/>
+    <path d="M468 20 L476 28 M476 20 L468 28" stroke="#FF5050" stroke-width="1.8" stroke-linecap="round"/>
+  </g>
+
   <!-- Settings button -->
   <g id="settingsIcon" transform="translate(420 50)" class="button" opacity="0.85">
     <circle cx="30" cy="30" r="20" fill="#111111" stroke="#00F0FF" stroke-width="1.5" />
@@ -134,10 +144,10 @@ MAIN_SVG_TEMPLATE = """
     <text x="100" y="425" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">FLOAT</text>
   </g>
 
-  <!-- History button -->
-  <g id="historyButtonGroup" class="interactive-button">
-    <rect id="historyButton" x="350" y="400" width="100" height="40" rx="20" fill="url(#buttonGradient)" class="button" stroke="#00F0FF" stroke-width="1" opacity="0.9"/>
-    <text x="400" y="425" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">HISTORY</text>
+  <!-- Usage button -->
+  <g id="usageButtonGroup" class="interactive-button">
+    <rect id="usageButton" x="350" y="400" width="100" height="40" rx="20" fill="url(#buttonGradient)" class="button" stroke="#00F0FF" stroke-width="1" opacity="0.9"/>
+    <text x="400" y="425" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">USAGE</text>
   </g>
 </svg>
 """
@@ -302,4 +312,80 @@ TEST_NETWORK_SVG = '''<svg width="300" height="340" viewBox="0 0 300 340" xmlns=
   <rect id="uploadBar" x="70" y="256" width="0" height="4" fill="url(#speedArcGradient)" rx="2" ry="2"/>
   <rect x="75" y="290" width="150" height="36" fill="url(#buttonGradient)" stroke="none" rx="18" ry="18" filter="url(#shadowEffect)"/>
   <text x="150" y="313" font-family="Arial" font-size="14" fill="#FFFFFF" font-weight="bold" text-anchor="middle">CLOSE</text>
+</svg>'''
+
+DATA_USAGE_SVG_TEMPLATE = '''<svg width="520" height="480" viewBox="0 0 520 480" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="usageBgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#121212" />
+      <stop offset="100%" stop-color="#05070B" />
+    </linearGradient>
+    <linearGradient id="usageCardGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#16202C" />
+      <stop offset="100%" stop-color="#0D131B" />
+    </linearGradient>
+    <linearGradient id="usageArcGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00F0FF" />
+      <stop offset="100%" stop-color="#0066FF" />
+    </linearGradient>
+    <linearGradient id="usageBtnGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0088FF" />
+      <stop offset="100%" stop-color="#0038AA" />
+    </linearGradient>
+    <filter id="usageGlow">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Main rounded card -->
+  <rect x="4" y="4" width="512" height="472" rx="15" ry="15" fill="url(#usageBgGradient)" stroke="#223447" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text x="28" y="34" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#00F0FF" filter="url(#usageGlow)">DATA USAGE</text>
+  <text id="usageModeSubtitle" x="158" y="34" font-family="Arial, sans-serif" font-size="12" fill="#88D8E6" opacity="0.8">Daily Breakdown</text>
+
+  <!-- Close X icon -->
+  <g id="usageCloseX">
+    <circle cx="486" cy="26" r="11" fill="#181818" stroke="#FF5050" stroke-width="1.2"/>
+    <path d="M482 22 L490 30 M490 22 L482 30" stroke="#FF5050" stroke-width="1.8" stroke-linecap="round"/>
+  </g>
+
+  <!-- Daily & Monthly summary cards -->
+  <rect x="28" y="52" width="224" height="66" rx="10" fill="url(#usageCardGradient)" stroke="#234057" stroke-width="1"/>
+  <text x="44" y="74" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#88D8E6" opacity="0.85">DAILY USAGE (TODAY)</text>
+  <text id="dailyTotal" x="44" y="102" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#00F0FF">0 B</text>
+
+  <rect x="268" y="52" width="224" height="66" rx="10" fill="url(#usageCardGradient)" stroke="#234057" stroke-width="1"/>
+  <text x="284" y="74" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#88D8E6" opacity="0.85">MONTHLY USAGE</text>
+  <text id="monthlyTotal" x="284" y="102" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#00FFAA">0 B</text>
+
+  <!-- View switch tabs & Reset button -->
+  <g id="usageTabs">
+    <rect id="dailyTabRect" x="28" y="130" width="105" height="30" rx="15" fill="url(#usageBtnGradient)" stroke="#00F0FF" stroke-width="1"/>
+    <text x="80.5" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF">DAILY</text>
+
+    <rect id="monthlyTabRect" x="143" y="130" width="115" height="30" rx="15" fill="#18222D" stroke="#2D4A63" stroke-width="1"/>
+    <text x="200.5" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#88D8E6">MONTHLY</text>
+
+    <rect id="resetUsageRect" x="392" y="130" width="100" height="30" rx="15" fill="#241519" stroke="#FF5050" stroke-width="1"/>
+    <text x="442" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#FF8080">RESET</text>
+  </g>
+
+  <!-- App | Data | Date Table Container -->
+  <rect x="28" y="172" width="464" height="242" rx="10" fill="#0E141C" stroke="#223447" stroke-width="1"/>
+  <rect x="28" y="172" width="464" height="32" rx="10" fill="#15212E"/>
+  <rect x="28" y="190" width="464" height="14" fill="#15212E"/>
+
+  <!-- Column headers -->
+  <text x="46" y="193" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#00F0FF">APP</text>
+  <text x="332" y="193" text-anchor="end" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#00F0FF">DATA</text>
+  <text x="474" y="193" text-anchor="end" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#00F0FF">DATE</text>
+
+  <!-- Dynamic Rows -->
+  <g id="usageRows"></g>
+
+  <!-- Bottom Close button -->
+  <rect x="185" y="428" width="150" height="36" rx="18" fill="url(#usageBtnGradient)" stroke="#00F0FF" stroke-width="1"/>
+  <text x="260" y="451" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#FFFFFF">CLOSE</text>
 </svg>'''
