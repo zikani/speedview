@@ -25,7 +25,8 @@ DEFAULT_SHOW_ABOUT = True
 DEFAULT_UPDATE_URL = "https://api.github.com/repos/yourusername/network-speed-meter/releases/latest"
 
 # File paths
-CONFIG_FILE = os.path.join(os.getenv("APPDATA"), "NetworkSpeedMeter", "network_speed_meter.conf")
+_CONFIG_BASE_DIR = os.getenv("APPDATA") or os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+CONFIG_FILE = os.path.join(_CONFIG_BASE_DIR, "NetworkSpeedMeter", "network_speed_meter.conf")
 TEMP_SVG_FILE = "temp_speedometer.svg"
 
 # UI Constants
