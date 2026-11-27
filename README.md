@@ -1,90 +1,195 @@
-# SpeedView
+<div align="center">
 
-A cross-platform desktop network speed monitor built with Python, PyQt5, and SVG.
+<img src="docs/assets/speedview-banner.svg" alt="SpeedView Hero Banner" width="820" />
+
+<br />
+<br />
+
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![PyQt5 + QtSvg](https://img.shields.io/badge/UI-PyQt5%20%2B%20QtSvg-22D3EE?style=for-the-badge&logo=qt&logoColor=white)](https://riverbankcomputing.com/software/pyqt/)
+[![CI](https://img.shields.io/github/actions/workflow/status/zikani/speedview/ci.yml?branch=main&style=for-the-badge&label=CI%20Tests)](.github/workflows/ci.yml)
+[![Release Build](https://img.shields.io/github/actions/workflow/status/zikani/speedview/release.yml?style=for-the-badge&label=PyInstaller%20Release&color=8B5CF6)](.github/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-2EE6A6?style=for-the-badge)](LICENSE)
+
+**Cross-platform desktop network monitor built with Python, PyQt5, and live hardware-accelerated SVG.**
+
+[Features](#features) · [UI Showcase](#ui-showcase) · [Window Lifecycle](#window-lifecycle--controls) · [Installation](#installation) · [Automated Release Build](#automated-release-build-pyinstaller) · [Configuration](#configuration--storage)
+
+</div>
+
+---
+
+## UI Showcase
+
+<div align="center">
+<img src="docs/assets/speedview-showcase.svg" alt="SpeedView Main Gauge, Corner Float Pill, and Data Usage Views" width="820" />
+</div>
+
+---
 
 ## Features
-- **Frameless SVG Speedometer Gauge**: Translucent rounded card displaying real-time download or upload speed, dynamic arc & dial scaling, and connection status (`Connected`, `Disconnected`, `Checking...`).
-- **Real Network Interface Detection**: Automatically detects active Ethernet, Wi-Fi (SSID, frequency band `2.4GHz`/`5GHz`/`6GHz`, signal strength), Virtual, or Loopback interfaces along with link speed and IPv4/IPv6 addresses across Linux, Windows, and macOS.
-- **Floating Compact Widget**: Always-on-top mini SVG speed pill with drag-to-move, signal bars, interface summary, and quick expand/close controls.
-- **SVG Network Speed Test**: Integrated speed test dialog powered by `speedtest-cli` (with `fast-cli` fallback) displaying live status, download/upload Mbps, and progress bars.
-- **Data Usage Window (`App | Data | Date`)**: SQLite-backed daily and monthly traffic tracking (`data_usage.db`) attributed across active socket processes, with an SVG viewer featuring `DAILY` / `MONTHLY` tabs and `RESET`.
-- **System Tray Integration**: Dynamic speed badge icon, synced tooltip (download/upload speed, connection state, active interface), high-speed alert notifications, and quick actions (`Show`, `Float Mode`, `Data Usage`, `Settings`, `Test Network`, `Exit`).
-- **Configurable Settings**: Select specific interface or enable `Auto-select best interface`, customize max gauge limits, speed unit (`Mbps`, `MB/s`, `Kbps`), update interval, tray behavior, notifications, and update URL.
+
+| Area | Capabilities |
+| :--- | :--- |
+| **Frameless SVG Speedometer** | Deep-navy translucent rounded card with gradient active arc (`#22D3EE → #3B82F6 → #8B5CF6`), dynamic dial scaling, Download/Upload switching, and cogwheel gear settings trigger. |
+| **Real-Time Ping / Latency** | Live TCP RTT measurement (`#pingBadge`) next to the speed gauge displaying millisecond latency (`ms`) with health color states (green `≤ 50 ms`, cyan `≤ 120 ms`, amber `> 120 ms`, rose `-- ms` offline). |
+| **Transparent Corner Float Pill** | Ultra-compact `136×40` semi-transparent glass widget showing **only signal bars and speed**, anchored automatically in the bottom-right screen corner whenever opened, with drag support plus `+` expand and `×` close-to-tray controls. |
+| **Real Interface Detection** | Automatically detects active **Ethernet**, **Wi-Fi** (real SSID, `2.4GHz` / `5GHz` / `6GHz` band, signal percentage), **Virtual**, or **Loopback** adapters with link speed and IPv4/IPv6 addresses across Linux, Windows, and macOS. |
+| **Live File Speed Testing** | Real-time streaming download and chunked upload throughput test (`NetworkController.measure_file_speed`) against public CDN endpoints with `speedtest-cli` and `fast-cli` fallbacks. |
+| **SQLite Data Usage (`App \| Data \| Date`)** | Per-process socket traffic attribution persisted in `data_usage.db`, presented in a frameless SVG window with `DAILY` / `MONTHLY` breakdowns and `RESET`. |
+| **Modern Settings & Autostart** | High-contrast dark-navy Settings dialog with interface selector (`Auto-select` or manual), **Start SpeedView automatically on system startup** (Windows Registry / Linux XDG `.desktop` / macOS LaunchAgent), units (`Mbps`, `MB/s`, `Kbps`), alerts, and in-app updater. |
+| **System Tray Background Daemon** | Keeps tracking speed and app data usage continuously in the background with a dynamic speed badge icon, synced tooltip, quick menu actions, and threshold alerts. |
+
+---
+
+## Window Lifecycle & Controls
+
+| Action | Resulting Behavior |
+| :--- | :--- |
+| **Close (`×`) on Main Window** | Hides the main speedometer and opens the **transparent corner Float widget**. |
+| **Close (`×` / `CLOSE` / `Esc`) on Data Usage or Network Test** | Closes the active tool window and opens the **Float widget** cleanly. |
+| **Close (`×` / `Esc`) on Float Widget** | Closes Float and **minimizes to the system tray**, keeping monitoring active in the background. |
+| **Minimize (`−`) on Main Window** | Minimizes directly to the **system tray**. |
+| **Usage (`USAGE`) Button** | Opens the `Data Usage` SVG window and hides the main window cleanly. |
+| **Expand (`+`) on Float Widget** | Restores and focuses the full `MainWindow` speedometer. |
+| **Tray `Exit`** | Shuts down all background timers/windows and exits cleanly. |
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+| :--- | :--- |
+| <kbd>Ctrl</kbd> + <kbd>S</kbd> | Open **Settings** |
+| <kbd>Ctrl</kbd> + <kbd>T</kbd> | Start **Network Speed Test** |
+| <kbd>Ctrl</kbd> + <kbd>F</kbd> | Toggle **Floating Mode** |
+| <kbd>Ctrl</kbd> + <kbd>U</kbd> / <kbd>Ctrl</kbd> + <kbd>H</kbd> | Open **Data Usage** (`App \| Data \| Date`) |
+| <kbd>Esc</kbd> | Close current dialog / minimize Float widget to tray |
+
+---
 
 ## Requirements
-- **Python**: 3.8 or higher (tested on Python 3.11)
-- **Operating Systems**: Windows, Linux, or macOS
-- **Dependencies** (`requirements.txt`): `PyQt5`, `psutil`, `speedtest-cli`, `requests`, `packaging`, and on Windows `pywin32`, `winshell`
 
-On Linux (Debian/Ubuntu), if installing PyQt5 via system packages or running headless tests:
+- **Python**: `3.8+` (CI & PyInstaller builds run on **Python 3.11**)
+- **Operating Systems**: Windows 10/11, Linux (X11 / XWayland), macOS
+- **Python Packages** (`requirements.txt`): `PyQt5`, `psutil`, `requests`, `speedtest-cli`, `packaging`, `pyinstaller` (plus `pywin32`, `winshell` automatically gated to `win32`)
+
+On Debian/Ubuntu Linux, ensure Qt5 XCB/SVG runtime libraries are installed:
 ```bash
-sudo apt-get install -y python3-pyqt5 python3-pyqt5.qtsvg python3-psutil python3-requests python3-packaging speedtest-cli
+sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+  python3-pyqt5 python3-pyqt5.qtsvg python3-psutil python3-requests python3-packaging \
+  libgl1 libxcb-xinerama0 libxkbcommon-x11-0 xvfb
 ```
+
+---
 
 ## Installation
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/zikani/speedview.git
-   cd speedview
-   ```
+### 1. Run Prebuilt Release Binaries (Recommended for End Users)
+Download the latest standalone binary from the [**GitHub Releases**](https://github.com/zikani/speedview/releases) page:
+- **Windows**: `SpeedView-windows-x64.exe`
+- **Linux**: `SpeedView-linux-x64` (or `SpeedView-linux-x64.tar.gz`)
 
-2. Create and activate a virtual environment (recommended):
-   ```bash
-   python -m venv .venv
-   # Linux/macOS:
-   source .venv/bin/activate
-   # Windows:
-   .venv\Scripts\activate
-   ```
+Verify integrity using the accompanying `.sha256` file if desired.
 
-3. Install Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 2. Run from Source
 
-4. Run the application:
-   ```bash
-   python main.py
-   ```
+```bash
+git clone https://github.com/zikani/speedview.git
+cd speedview
 
-## Usage & Shortcuts
-- **Main SVG Controls**: Click `FLOAT`, `TEST NETWORK`, `USAGE`, the top-right settings gear, or minimize/close controls; drag anywhere on the card background to reposition.
-- **System Tray**: Right-click for `Show`, `Float Mode`, `Data Usage`, `Settings`, `Test Network`, and `Exit`; double-click to show/hide; middle-click to run a speed test.
-- **Keyboard Shortcuts**:
-  - `Ctrl+S`: Open Settings
-  - `Ctrl+T`: Run Network Speed Test
-  - `Ctrl+F`: Toggle Floating Mode
-  - `Ctrl+U` / `Ctrl+H`: Open Data Usage window
-  - `Esc`: Close dialog / hide when in floating mode
+python -m venv .venv
+# Linux / macOS:
+source .venv/bin/activate
+# Windows:
+.venv\Scripts\activate
+
+pip install -r requirements.txt
+python main.py
+```
+
+---
+
+## Automated Release Build (PyInstaller)
+
+SpeedView includes an automated GitHub Actions release pipeline in [`.github/workflows/release.yml`](.github/workflows/release.yml) alongside continuous integration tests in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+### How Tag Releases Work
+Whenever you push a semantic version tag matching `v*` (for example `v1.0.1`), GitHub Actions automatically:
+
+1. **Verifies Code & Tests** on both `ubuntu-latest` (under `xvfb-run`) and `windows-latest` (`python -m unittest discover -s tests -v`).
+2. **Packages Standalone Binaries** via PyInstaller (`--onefile --windowed --collect-submodules speedview`):
+   - Windows: `SpeedView-windows-x64.exe` + `SpeedView-windows-x64.exe.sha256`
+   - Linux: `SpeedView-linux-x64`, `SpeedView-linux-x64.tar.gz` + `SpeedView-linux-x64.sha256`
+3. **Publishes a GitHub Release** automatically with generated release notes and attaches all binaries and SHA-256 checksums.
+
+```bash
+# Bump APP_VERSION in speedview/config/config.py, commit, then push a tag:
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+You can also trigger a dry-run build manually from the GitHub **Actions → SpeedView Release Build → Run workflow** button (`workflow_dispatch`) without creating a release.
+
+### Local PyInstaller Build
+To package a standalone executable locally:
+
+```bash
+pip install -r requirements.txt
+pyinstaller --noconfirm --clean --onefile --windowed \
+  --name SpeedView \
+  --collect-submodules speedview \
+  --hidden-import PyQt5.QtSvg \
+  --hidden-import PyQt5.QtXml \
+  main.py
+```
+
+---
 
 ## Configuration & Storage
-Settings are stored as JSON in the OS user config directory (`%APPDATA%\NetworkSpeedMeter\network_speed_meter.conf` on Windows, `$XDG_CONFIG_HOME/NetworkSpeedMeter/network_speed_meter.conf` or `~/.config/NetworkSpeedMeter/network_speed_meter.conf` on Linux/macOS).
 
-Default configuration values (`speedview/config/config.py`):
-- `max_speed`: `100` Mbps download scale
-- `max_upload`: `50` Mbps upload scale
-- `update_interval`: `1.0` seconds
-- `speed_unit`: `"Mbps"` (`Mbps`, `MB/s`, `Kbps`)
-- `minimize_to_tray`: `true`
-- `close_to_tray`: `true`
-- `enable_notifications`: `true` (`notification_threshold`: `50` Mbps)
+Settings persist as JSON in your OS config folder:
+- **Windows**: `%APPDATA%\NetworkSpeedMeter\network_speed_meter.conf`
+- **Linux / macOS**: `$XDG_CONFIG_HOME/NetworkSpeedMeter/network_speed_meter.conf` (default `~/.config/NetworkSpeedMeter/network_speed_meter.conf`)
 
-Per-app traffic records are stored in `data_usage.db` inside the same `NetworkSpeedMeter` config directory.
+Per-app traffic totals persist in `data_usage.db` in the same folder.
+
+| Key | Default | Description |
+| :--- | :--- | :--- |
+| `max_speed` | `100` | Maximum Download gauge scale (Mbps) |
+| `max_upload` | `50` | Maximum Upload gauge scale (Mbps) |
+| `update_interval` | `1.0` | Speed sampling interval in seconds |
+| `speed_unit` | `"Mbps"` | Display unit (`Mbps`, `MB/s`, `Kbps`) |
+| `show_upload_speed` | `false` | Show Upload instead of Download on the primary gauge |
+| `start_on_startup` | `false` | Register/unregister OS autostart (`Run` key / `.desktop` / LaunchAgent) |
+| `start_minimized` | `false` | Launch directly hidden in the system tray |
+| `minimize_to_tray` | `true` | Keep system tray icon active for background monitoring |
+| `close_to_tray` | `true` | Keep background monitoring running when windows close |
+| `enable_notifications` | `true` | Enable desktop high-speed and test alerts |
+| `notification_threshold` | `50` | High-speed alert threshold (Mbps) |
+
+---
 
 ## Testing & CI
-Run the full unit test suite (use `xvfb-run -a` on headless Linux):
+
+Run syntax checks and the full headless unit test suite locally:
+
 ```bash
-python -m compileall main.py speedview tests
+python -m compileall -q main.py speedview tests
+# Linux headless:
+xvfb-run -a python -m unittest discover -s tests -v
+# Windows / desktop session:
 python -m unittest discover -s tests -v
 ```
 
-Automated CI runs via `.github/workflows/ci.yml` on `ubuntu-latest` and `windows-latest` for every push and pull request.
+---
 
 ## Troubleshooting
-1. **Linux headless / Wayland Qt errors**: Ensure `PyQt5` SVG libraries and X11/xcb runtime dependencies (`libxcb-xinerama0`, `libxkbcommon-x11-0`, `libgl1`) are installed.
-2. **Speed test fails behind proxy/offline**: `NetworkController` tries `speedtest-cli` and falls back to `fast-cli` (`fast --json`), showing the failure reason directly in the SVG test dialog.
-3. **Zero per-app traffic in Data Usage**: On Linux/macOS, inspecting other users' socket PIDs may require elevated permissions; traffic for the current user's processes is attributed automatically, with unmatched bytes grouped under `System / Other`.
+
+1. **Linux headless / Wayland Qt errors**: Install `python3-pyqt5.qtsvg`, `libxcb-xinerama0`, `libxkbcommon-x11-0`, and `libgl1`, or run headless under `xvfb-run -a`.
+2. **Offline or blocked speed test endpoints**: `NetworkController` tries live streaming HTTP endpoints first, then falls back cleanly to `speedtest-cli` and `fast-cli`, displaying status inside the SVG dialog.
+3. **Unattributed background bytes in Data Usage**: Inspecting other users' socket PIDs on Linux/macOS may require elevated privileges; unmatched traffic is grouped safely under `System / Other`.
+
+---
 
 ## License
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+This project is licensed under the MIT License — see [LICENSE](LICENSE).

@@ -1,0 +1,83 @@
+<svg width="840" height="220" viewBox="0 0 840 220" xmlns="http://www.w3.org/2000/svg"
+     font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <linearGradient id="heroBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B1324" />
+      <stop offset="55%" stop-color="#0E172B" />
+      <stop offset="100%" stop-color="#05080F" />
+    </linearGradient>
+    <radialGradient id="heroGlow" cx="80%" cy="50%" r="45%">
+      <stop offset="0%" stop-color="#22D3EE" stop-opacity="0.22" />
+      <stop offset="60%" stop-color="#3B82F6" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#3B82F6" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="accentArc" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22D3EE" />
+      <stop offset="55%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#8B5CF6" />
+    </linearGradient>
+    <linearGradient id="titleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#F8FAFC" />
+      <stop offset="100%" stop-color="#7DD3FC" />
+    </linearGradient>
+  </defs>
+
+  <rect width="840" height="220" rx="22" fill="url(#heroBg)" />
+  <rect width="840" height="220" rx="22" fill="url(#heroGlow)" />
+  <rect x="0.75" y="0.75" width="838.5" height="218.5" rx="21.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.09" stroke-width="1.5" />
+
+  <!-- Subtle grid dots -->
+  <circle cx="540" cy="40" r="1.5" fill="#22D3EE" opacity="0.25" />
+  <circle cx="565" cy="40" r="1.5" fill="#22D3EE" opacity="0.18" />
+  <circle cx="540" cy="65" r="1.5" fill="#22D3EE" opacity="0.18" />
+  <circle cx="565" cy="65" r="1.5" fill="#22D3EE" opacity="0.12" />
+
+  <!-- Left brand & feature summary -->
+  <g transform="translate(42, 42)">
+    <rect x="0" y="0" width="138" height="24" rx="12" fill="#22D3EE" fill-opacity="0.12" stroke="#22D3EE" stroke-opacity="0.38" stroke-width="1" />
+    <circle cx="15" cy="12" r="3.5" fill="#2EE6A6" />
+    <text x="26" y="15.5" font-size="11" font-weight="700" letter-spacing="0.8" fill="#7DD3FC">PYQT5 + SVG DESKTOP</text>
+
+    <text x="0" y="68" font-size="40" font-weight="800" fill="url(#titleGrad)">SpeedView</text>
+    <text x="0" y="96" font-size="15" font-weight="400" fill="#9FB3D9">
+      Frameless real-time network speed monitor with live ping latency,
+    </text>
+    <text x="0" y="116" font-size="15" font-weight="400" fill="#9FB3D9">
+      transparent corner float pill, SQLite app usage, &amp; HTTP speed tests.
+    </text>
+
+    <!-- Metric highlight chips -->
+    <g transform="translate(0, 134)">
+      <rect x="0" y="0" width="110" height="26" rx="8" fill="#FFFFFF" fill-opacity="0.05" stroke="#FFFFFF" stroke-opacity="0.12" />
+      <text x="55" y="16.5" text-anchor="middle" font-size="11" font-weight="600" fill="#E2ECFF">Live Speed Gauge</text>
+
+      <rect x="120" y="0" width="96" height="26" rx="8" fill="#FFFFFF" fill-opacity="0.05" stroke="#2EE6A6" stroke-opacity="0.35" />
+      <text x="168" y="16.5" text-anchor="middle" font-size="11" font-weight="600" fill="#2EE6A6">Ping (RTT ms)</text>
+
+      <rect x="226" y="0" width="108" height="26" rx="8" fill="#FFFFFF" fill-opacity="0.05" stroke="#22D3EE" stroke-opacity="0.35" />
+      <text x="280" y="16.5" text-anchor="middle" font-size="11" font-weight="600" fill="#7DD3FC">Corner Float Pill</text>
+
+      <rect x="344" y="0" width="118" height="26" rx="8" fill="#FFFFFF" fill-opacity="0.05" stroke="#8B5CF6" stroke-opacity="0.35" />
+      <text x="403" y="16.5" text-anchor="middle" font-size="11" font-weight="600" fill="#C4B5FD">Per-App Data DB</text>
+    </g>
+  </g>
+
+  <!-- Right mini gauge motif -->
+  <g transform="translate(705, 112)">
+    <circle cx="0" cy="0" r="82" fill="#0A1120" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1" />
+    <path d="M -49.5 49.5 A 70 70 0 1 1 49.5 49.5" fill="none" stroke="#1B2540" stroke-width="10" stroke-linecap="round" />
+    <path d="M -49.5 49.5 A 70 70 0 1 1 56 -42" fill="none" stroke="url(#accentArc)" stroke-width="10" stroke-linecap="round" />
+    <line x1="0" y1="0" x2="36" y2="-38" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" />
+    <circle cx="0" cy="0" r="7" fill="#0B1220" stroke="#22D3EE" stroke-width="2" />
+    <text x="0" y="28" text-anchor="middle" font-size="18" font-weight="700" fill="#F2F6FF">94.6</text>
+    <text x="0" y="42" text-anchor="middle" font-size="10" font-weight="600" fill="#7DD3FC">Mbps</text>
+    <!-- Mini corner float preview overlapping bottom-right -->
+    <g transform="translate(-8, 52)">
+      <rect x="0" y="0" width="96" height="28" rx="10" fill="#0B1324" fill-opacity="0.82" stroke="#22D3EE" stroke-opacity="0.45" />
+      <rect x="10" y="15" width="3" height="6" rx="1" fill="#2EE6A6" />
+      <rect x="15" y="12" width="3" height="9" rx="1" fill="#2EE6A6" />
+      <rect x="20" y="9" width="3" height="12" rx="1" fill="#2EE6A6" />
+      <text x="58" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#2EE6A6">94.6 Mbps</text>
+    </g>
+  </g>
+</svg>

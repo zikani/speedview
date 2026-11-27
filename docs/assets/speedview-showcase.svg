@@ -1,0 +1,140 @@
+<svg width="840" height="290" viewBox="0 0 840 290" xmlns="http://www.w3.org/2000/svg"
+     font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <linearGradient id="panelBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0E1628" />
+      <stop offset="100%" stop-color="#05080F" />
+    </linearGradient>
+    <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22D3EE" />
+      <stop offset="55%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#8B5CF6" />
+    </linearGradient>
+    <linearGradient id="btnGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2563EB" />
+      <stop offset="100%" stop-color="#1E40AF" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer subtle frame -->
+  <rect width="840" height="290" rx="18" fill="#070B14" stroke="#1E2E4A" stroke-width="1" />
+
+  <!-- Card 1: Main Gauge + Ping + Gear -->
+  <g transform="translate(20, 18)">
+    <rect width="250" height="254" rx="18" fill="url(#panelBg)" stroke="#FFFFFF" stroke-opacity="0.09" />
+    <!-- Top bar -->
+    <rect x="16" y="24" width="3" height="8" rx="1.5" fill="#22D3EE" />
+    <rect x="21" y="21" width="3" height="11" rx="1.5" fill="#22D3EE" />
+    <rect x="26" y="18" width="3" height="14" rx="1.5" fill="#22D3EE" />
+    <rect x="31" y="15" width="3" height="17" rx="1.5" fill="#22D3EE" />
+    <text x="42" y="23" font-size="9.5" font-weight="700" fill="#F2F6FF">Connected</text>
+    <text x="42" y="34" font-size="8" fill="#8FA3C9">Wi-Fi • 5GHz • 866 Mbps</text>
+
+    <!-- Minimize & Close-to-Float circles -->
+    <circle cx="216" cy="18" r="6" fill="#FFFFFF" fill-opacity="0.06" stroke="#FFFFFF" stroke-opacity="0.18" />
+    <line x1="213" y1="18" x2="219" y2="18" stroke="#CBD5F5" stroke-width="1.2" />
+    <circle cx="232" cy="18" r="6" fill="#FF5C7A" fill-opacity="0.14" stroke="#FF5C7A" stroke-opacity="0.55" />
+    <path d="M229.5 15.5 L234.5 20.5 M234.5 15.5 L229.5 20.5" stroke="#FF8CA1" stroke-width="1.2" />
+
+    <!-- Cogwheel gear button -->
+    <circle cx="222" cy="40" r="10" fill="#FFFFFF" fill-opacity="0.05" stroke="#FFFFFF" stroke-opacity="0.14" />
+    <circle cx="222" cy="40" r="3.5" fill="none" stroke="#7DD3FC" stroke-width="1.4" />
+    <circle cx="222" cy="40" r="1.2" fill="#22D3EE" />
+
+    <!-- Speed Gauge -->
+    <path d="M 72 162 A 74 74 0 1 1 178 162" fill="none" stroke="#1B2540" stroke-width="8" stroke-linecap="round" />
+    <path d="M 72 162 A 74 74 0 1 1 168 78" fill="none" stroke="url(#arcGrad)" stroke-width="8" stroke-linecap="round" />
+    <line x1="125" y1="112" x2="152" y2="74" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
+    <circle cx="125" cy="112" r="5" fill="#0B1220" stroke="#22D3EE" stroke-width="1.5" />
+    <text x="125" y="144" text-anchor="middle" font-size="22" font-weight="700" fill="#F2F6FF">48.20</text>
+    <text x="125" y="158" text-anchor="middle" font-size="9.5" fill="#7DD3FC">Mbps • Download</text>
+
+    <!-- Ping badge -->
+    <rect x="190" y="160" width="46" height="24" rx="6" fill="#FFFFFF" fill-opacity="0.05" stroke="#22D3EE" stroke-opacity="0.28" />
+    <circle cx="198" cy="168" r="2" fill="#2EE6A6" />
+    <text x="203" y="170" font-size="6.5" font-weight="700" fill="#8FA3C9">PING</text>
+    <text x="213" y="180" text-anchor="middle" font-size="8.5" font-weight="700" fill="#2EE6A6">18 ms</text>
+
+    <!-- Action buttons -->
+    <rect x="18" y="196" width="56" height="24" rx="12" fill="#0891B2" />
+    <text x="46" y="211.5" text-anchor="middle" font-size="8" font-weight="700" fill="#FFFFFF">FLOAT</text>
+    <rect x="82" y="196" width="86" height="24" rx="12" fill="url(#btnGrad)" />
+    <text x="125" y="211.5" text-anchor="middle" font-size="8" font-weight="700" fill="#FFFFFF">TEST NETWORK</text>
+    <rect x="176" y="196" width="56" height="24" rx="12" fill="url(#btnGrad)" />
+    <text x="204" y="211.5" text-anchor="middle" font-size="8" font-weight="700" fill="#FFFFFF">USAGE</text>
+
+    <text x="125" y="241" text-anchor="middle" font-size="10.5" font-weight="600" fill="#9FB3D9">Main Speedometer + Ping Badge</text>
+  </g>
+
+  <!-- Card 2: Corner Float Pill & Settings -->
+  <g transform="translate(295, 18)">
+    <rect width="250" height="254" rx="18" fill="url(#panelBg)" stroke="#FFFFFF" stroke-opacity="0.09" />
+
+    <!-- Corner Float Pill Preview -->
+    <text x="125" y="28" text-anchor="middle" font-size="10" font-weight="700" letter-spacing="0.8" fill="#7DD3FC">TRANSPARENT CORNER FLOAT (136×40)</text>
+    <rect x="30" y="42" width="190" height="58" rx="12" fill="#131F36" stroke="#243656" stroke-dasharray="3 3" />
+    <g transform="translate(72, 51)">
+      <rect width="136" height="40" rx="14" fill="#0B1324" fill-opacity="0.62" stroke="#22D3EE" stroke-opacity="0.45" />
+      <rect x="10" y="21" width="3.5" height="7" rx="1.5" fill="#2EE6A6" />
+      <rect x="15.5" y="18" width="3.5" height="10" rx="1.5" fill="#2EE6A6" />
+      <rect x="21" y="15" width="3.5" height="13" rx="1.5" fill="#2EE6A6" />
+      <rect x="26.5" y="11" width="3.5" height="17" rx="1.5" fill="#2EE6A6" />
+      <line x1="35" y1="9" x2="35" y2="31" stroke="#FFFFFF" stroke-opacity="0.14" />
+      <text x="64" y="22" text-anchor="middle" font-size="15" font-weight="700" fill="#2EE6A6">48.2</text>
+      <text x="64" y="33" text-anchor="middle" font-size="8" font-weight="600" fill="#8FA3C9">Mbps</text>
+      <circle cx="103" cy="20" r="6" fill="#FFFFFF" fill-opacity="0.08" stroke="#2EE6A6" stroke-opacity="0.55" />
+      <path d="M100.5,20 L105.5,20 M103,17.5 L103,22.5" stroke="#8CFFD6" stroke-width="1.3" />
+      <circle cx="122" cy="20" r="6" fill="#FF5C7A" fill-opacity="0.14" stroke="#FF5C7A" stroke-opacity="0.55" />
+      <path d="M120,18 L124,22 M120,22 L124,18" stroke="#FF8CA1" stroke-width="1.3" />
+    </g>
+
+    <!-- Close Lifecycle summary inside card -->
+    <rect x="20" y="114" width="210" height="104" rx="12" fill="#111B2E" stroke="#1E2E4A" />
+    <text x="32" y="134" font-size="10" font-weight="700" fill="#22D3EE">CLOSE-TO-FLOAT &amp; STARTUP</text>
+    <text x="32" y="154" font-size="9.5" fill="#E2ECFF">• Close Main / Usage / Test → Opens Float</text>
+    <text x="32" y="172" font-size="9.5" fill="#E2ECFF">• Close Float (×) → Minimizes to System Tray</text>
+    <text x="32" y="190" font-size="9.5" fill="#E2ECFF">• Minimize (_) → Hides directly to Tray</text>
+    <text x="32" y="208" font-size="9.5" fill="#2EE6A6">• Start on Startup: Win / Linux / macOS</text>
+
+    <text x="125" y="241" text-anchor="middle" font-size="10.5" font-weight="600" fill="#9FB3D9">Signal+Speed Pill &amp; Background Flow</text>
+  </g>
+
+  <!-- Card 3: Data Usage + Live HTTP Test -->
+  <g transform="translate(570, 18)">
+    <rect width="250" height="254" rx="18" fill="url(#panelBg)" stroke="#FFFFFF" stroke-opacity="0.09" />
+    <text x="18" y="30" font-size="11" font-weight="700" fill="#F2F6FF">DATA USAGE</text>
+    <text x="98" y="30" font-size="8.5" fill="#6FA8C0">Daily Breakdown</text>
+
+    <!-- Daily & Monthly mini cards -->
+    <rect x="18" y="42" width="102" height="40" rx="8" fill="#111B2E" stroke="#234057" />
+    <text x="26" y="56" font-size="7" font-weight="600" fill="#6FA8C0">DAILY USAGE</text>
+    <text x="26" y="74" font-size="13" font-weight="700" fill="#22D3EE">1.42 GB</text>
+
+    <rect x="130" y="42" width="102" height="40" rx="8" fill="#111B2E" stroke="#234057" />
+    <text x="138" y="56" font-size="7" font-weight="600" fill="#6FA8C0">MONTHLY USAGE</text>
+    <text x="138" y="74" font-size="13" font-weight="700" fill="#34D399">28.9 GB</text>
+
+    <!-- App | Data | Date rows -->
+    <rect x="18" y="92" width="214" height="126" rx="10" fill="#0B121A" stroke="#223447" />
+    <text x="28" y="109" font-size="7.5" font-weight="700" fill="#6FA8C0">APP</text>
+    <text x="158" y="109" text-anchor="end" font-size="7.5" font-weight="700" fill="#6FA8C0">DATA</text>
+    <text x="220" y="109" text-anchor="end" font-size="7.5" font-weight="700" fill="#6FA8C0">DATE</text>
+
+    <rect x="24" y="118" width="202" height="22" rx="4" fill="#111B2E" />
+    <text x="30" y="132" font-size="8.5" fill="#F2F6FF">firefox</text>
+    <text x="158" y="132" text-anchor="end" font-size="8.5" font-weight="700" fill="#22D3EE">842 MB</text>
+    <text x="220" y="132" text-anchor="end" font-size="8" fill="#8FA3C9">Today</text>
+
+    <rect x="24" y="144" width="202" height="22" rx="4" fill="#0D1524" />
+    <text x="30" y="158" font-size="8.5" fill="#F2F6FF">python3</text>
+    <text x="158" y="158" text-anchor="end" font-size="8.5" font-weight="700" fill="#22D3EE">410 MB</text>
+    <text x="220" y="158" text-anchor="end" font-size="8" fill="#8FA3C9">Today</text>
+
+    <rect x="24" y="170" width="202" height="22" rx="4" fill="#111B2E" />
+    <text x="30" y="184" font-size="8.5" fill="#F2F6FF">System / Other</text>
+    <text x="158" y="184" text-anchor="end" font-size="8.5" font-weight="700" fill="#22D3EE">168 MB</text>
+    <text x="220" y="184" text-anchor="end" font-size="8" fill="#8FA3C9">Today</text>
+
+    <text x="125" y="241" text-anchor="middle" font-size="10.5" font-weight="600" fill="#9FB3D9">SQLite Per-App Daily / Monthly Usage</text>
+  </g>
+</svg>
