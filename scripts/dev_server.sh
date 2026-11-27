@@ -12,7 +12,7 @@ if ! command -v Xvfb >/dev/null 2>&1 || ! command -v websockify >/dev/null 2>&1 
   done
   if ! command -v Xvfb >/dev/null 2>&1 || ! command -v websockify >/dev/null 2>&1 || ! command -v pip3 >/dev/null 2>&1 || ! python3 -c "import PyQt5.QtSvg, psutil, requests, packaging, speedtest" >/dev/null 2>&1; then
     apt-get update -qq </dev/null
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq -o Dpkg::Options::="--force-confold" \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends -o Dpkg::Options::="--force-confold" \
       python3-pip python3-pyqt5 python3-pyqt5.qtsvg python3-psutil python3-requests \
       python3-packaging speedtest-cli xvfb x11vnc novnc websockify openbox </dev/null
   fi
