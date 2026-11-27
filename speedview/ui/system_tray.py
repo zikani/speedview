@@ -66,18 +66,27 @@ class SystemTray:
         return QIcon(pixmap)
 
     def update_tray_icon(self, speed):
-        """Update the tray icon and tooltip with current speed in selected unit."""
+        """Update the tray icon and tooltip with current speed, direction, and connection status."""
         self.last_speed = speed
-        unit = getattr(getattr(self.main_window, "settings", None), "speed_unit", "Mbps")
+        settings = getattr(self.main_window, "settings", None)
+        unit = getattr(settings, "speed_unit", "Mbps")
+        show_upload = bool(getattr(settings, "show_upload_speed", False))
+        direction = "Upload" if show_upload else "Download"
         display_speed = convert_speed(speed, unit)
 
         icon = self.create_dynamic_icon(display_speed)
         self.tray_icon.setIcon(icon)
 
+        nc = getattr(self.main_window, "network_controller", None)
+        conn_status = getattr(nc, "connection_status", "Active" if speed > 0 else "Idle") if nc else ("Active" if speed > 0 else "Idle")
+        details = getattr(nc, "interface_details", None) if nc else None
+        iface = getattr(settings, "selected_interface", None) or (details.get("interface") if isinstance(details, dict) else None)
+        iface_suffix = f" ({iface})" if iface else ""
+
         tooltip = (
             f"SpeedView Network Monitor\n"
-            f"Current Speed: {display_speed:.2f} {unit}\n"
-            f"Status: {'Active' if speed > 0 else 'Idle'}\n"
+            f"{direction}: {display_speed:.2f} {unit}\n"
+            f"Network: {conn_status}{iface_suffix}\n"
             f"Double-click to show/hide"
         )
         self.tray_icon.setToolTip(tooltip)

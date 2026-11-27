@@ -9,6 +9,7 @@ from speedview.ui.resources.svg_templates import FLOATING_SVG_TEMPLATE
 
 class FloatingWindow(QWidget):
     expand_requested = pyqtSignal()
+    closed = pyqtSignal()
 
     def __init__(self, speed_controller, settings, network_controller):
         super().__init__()
@@ -59,9 +60,12 @@ class FloatingWindow(QWidget):
     def _get_connection_info(self):
         selected_iface = getattr(self.settings, 'selected_interface', None)
         try:
-            return self.network_controller.get_connection_info(selected_iface)
+            return self.network_controller.get_connection_info(selected_iface, use_cache=True)
         except TypeError:
-            return self.network_controller.get_connection_info()
+            try:
+                return self.network_controller.get_connection_info(selected_iface)
+            except TypeError:
+                return self.network_controller.get_connection_info()
 
     def update_display(self, forced_speeds=None):
         """Update the display with current network stats"""
@@ -142,4 +146,5 @@ class FloatingWindow(QWidget):
 
     def closeEvent(self, event):
         self.update_timer.stop()
+        self.closed.emit()
         event.accept()

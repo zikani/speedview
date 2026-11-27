@@ -28,7 +28,16 @@ class NetworkController(QObject):
     def set_interface(self, interface_name):
         """Set preferred network interface for status/detail inspection."""
         self.selected_interface = interface_name
+        self.interface_details = {}
         self.check_connection_status()
+
+    def get_cached_interface_details(self, interface_name=None):
+        """Return cached interface details if available, else compute and cache."""
+        target = interface_name if interface_name is not None else self.selected_interface
+        if self.interface_details and (target is None or self.interface_details.get("interface") == target):
+            return self.interface_details
+        self.interface_details = self.get_interface_details(target)
+        return self.interface_details
 
     def check_connection_status(self):
         """Check if network is connected in a background thread"""
@@ -446,9 +455,13 @@ class NetworkController(QObject):
             except Exception as fallback_e:
                 self.speed_test_failed.emit(f"Speedtest failed: {e}; fast-cli failed: {fallback_e}")
 
-    def get_connection_info(self, interface_name=None):
+    def get_connection_info(self, interface_name=None, use_cache=False):
         """Get real (connection_type, band_or_detail) for the active/selected interface."""
-        details = self.get_interface_details(interface_name)
+        details = (
+            self.get_cached_interface_details(interface_name)
+            if use_cache
+            else self.get_interface_details(interface_name)
+        )
         conn_type = details["connection_type"]
         if conn_type == "Disconnected":
             return "Disconnected", "N/A"

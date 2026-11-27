@@ -1,4 +1,5 @@
 import sys
+import time
 import logging
 from PyQt5.QtWidgets import (
     QWidget,
@@ -47,6 +48,7 @@ class MainWindow(QWidget):
         self.is_dragging = False
         self.drag_position = QPoint()
         self.last_speeds = (0.0, 0.0)
+        self._last_threshold_alert = 0.0
 
         self.setup_ui()
         self.setup_connections()
@@ -127,13 +129,21 @@ class MainWindow(QWidget):
                 self.tray.show()
 
     def on_bytes_transferred(self, delta_recv, delta_sent):
-        """Persist real byte deltas to DataUsageTracker."""
+        """Persist real byte deltas to DataUsageTracker and refresh open DataUsageDialog."""
         self.data_usage_tracker.record_traffic(delta_recv, delta_sent)
+        if self._usage_dialog is not None and self._usage_dialog.isVisible():
+            self._usage_dialog.refresh_display()
 
     def _get_real_connection_info(self):
         selected = getattr(self.settings, 'selected_interface', None)
-        if hasattr(self.network_controller, 'get_interface_details'):
+        if hasattr(self.network_controller, 'get_cached_interface_details'):
+            details = self.network_controller.get_cached_interface_details(selected)
+        elif hasattr(self.network_controller, 'get_interface_details'):
             details = self.network_controller.get_interface_details(selected)
+        else:
+            details = None
+
+        if details is not None:
             conn_type = details.get("connection_type", "Unknown")
             summary_parts = []
             if details.get("interface"):
@@ -148,6 +158,7 @@ class MainWindow(QWidget):
             meta = " • ".join(ip_parts) if ip_parts else (details.get("summary") or "")
             type_line = f"{conn_type} ({' • '.join(summary_parts)})" if summary_parts else conn_type
             return type_line, meta
+
         try:
             conn_type, band = self.network_controller.get_connection_info(selected)
         except TypeError:
@@ -187,6 +198,18 @@ class MainWindow(QWidget):
                 self.tray.update_tray_icon(display_speed)
             elif hasattr(self.tray, 'update_icon'):
                 self.tray.update_icon(display_speed)
+
+            if (
+                getattr(self.settings, 'enable_notifications', False)
+                and display_speed >= getattr(self.settings, 'notification_threshold', 50)
+                and (time.time() - self._last_threshold_alert) >= 60.0
+                and hasattr(self.tray, 'show_message')
+            ):
+                self._last_threshold_alert = time.time()
+                self.tray.show_message(
+                    "High Network Speed Alert",
+                    f"Speed reached {display_speed:.2f} Mbps (threshold: {self.settings.notification_threshold} Mbps)",
+                )
 
     def update_display(self):
         """Update all display elements using live controller and settings state"""
@@ -275,6 +298,8 @@ class MainWindow(QWidget):
             self.tray = None
 
         self.update_display()
+        if self.floating_window is not None:
+            self.floating_window.update_display()
 
     def open_data_usage(self):
         """Open the SVG Data Usage window showing App | Data | Date and Daily/Monthly totals."""
@@ -322,12 +347,7 @@ class MainWindow(QWidget):
         elif hasattr(self.speed_controller, 'run_speed_test'):
             self.speed_controller.run_speed_test()
 
-    def _on_test_dialog_result(self, download_speed, upload_speed):
-        if self._test_dialog is not None:
-            if download_speed == 0 and upload_speed == 0:
-                self._test_dialog.show_failure()
-            else:
-                self._test_dialog.show_results(download_speed, upload_speed)
+    def _disconnect_test_signals(self):
         if hasattr(self.network_controller, 'speed_test_complete'):
             try:
                 self.network_controller.speed_test_complete.disconnect(self._on_test_dialog_result)
@@ -339,10 +359,19 @@ class MainWindow(QWidget):
             except TypeError:
                 pass
 
+    def _on_test_dialog_result(self, download_speed, upload_speed):
+        if self._test_dialog is not None:
+            if download_speed == 0 and upload_speed == 0:
+                self._test_dialog.show_failure()
+            else:
+                self._test_dialog.show_results(download_speed, upload_speed)
+        self._disconnect_test_signals()
+
     def _on_test_dialog_failed(self, error_msg):
         if self._test_dialog is not None:
-            self._test_dialog.show_failure("Test Failed")
-        self._on_test_dialog_result(0, 0)
+            msg = str(error_msg).splitlines()[0] if error_msg else "Test Failed"
+            self._test_dialog.show_failure(msg)
+        self._disconnect_test_signals()
 
     def on_speed_test_complete(self, download_speed, upload_speed):
         """Handle completed speed test"""
@@ -369,6 +398,7 @@ class MainWindow(QWidget):
                 self.network_controller,
             )
             self.floating_window.expand_requested.connect(self._on_floating_expand)
+            self.floating_window.closed.connect(self._on_floating_closed)
             self.floating_window.show()
             self.hide()
         else:
@@ -376,6 +406,10 @@ class MainWindow(QWidget):
             self.floating_window.close()
             self.floating_window = None
             self.show()
+
+    def _on_floating_closed(self):
+        self.floating_window = None
+        self.settings.is_floating = False
 
     def _on_floating_expand(self):
         self.settings.is_floating = False

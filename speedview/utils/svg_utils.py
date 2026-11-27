@@ -159,15 +159,24 @@ def update_test_network_svg(svg_template, status, download, upload):
     """Update the test network SVG with real status, download/upload values, and progress bars."""
     dl = max(0.0, float(download or 0.0))
     ul = max(0.0, float(upload or 0.0))
-    safe_status = escape(str(status or "Ready"))
+    raw_status = str(status or "Ready")
 
     title = "Network Speed Test"
-    if "Complete" in safe_status:
+    display_status = raw_status
+    if "Complete" in raw_status:
         title = "Test Complete!"
-    elif "Failed" in safe_status:
+        if raw_status == "Test Complete!":
+            display_status = "Speed test finished"
+    elif "Failed" in raw_status or "error" in raw_status.lower():
         title = "Test Failed"
-    elif "Running" in safe_status or "Testing" in safe_status:
+        if raw_status == "Test Failed":
+            display_status = "Check connection and try again"
+    elif "Running" in raw_status or "Testing" in raw_status:
         title = "Testing Network Speed..."
+
+    if len(display_status) > 36:
+        display_status = display_status[:35] + "…"
+    safe_status = escape(display_status)
 
     # Scale progress bars up to 160px (assuming 100 Mbps reference, capped at 160px)
     dl_width = min(160.0, (dl / 100.0) * 160.0) if dl > 0 else 0.0

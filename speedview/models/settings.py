@@ -38,6 +38,11 @@ class LoadError(SettingsError):
 
 class Settings:
     def __init__(self):
+        self._set_defaults()
+        # Load saved settings if available
+        self.load()
+
+    def _set_defaults(self):
         # Core settings
         self.max_speed = DEFAULT_MAX_SPEED
         self.max_upload = DEFAULT_MAX_UPLOAD
@@ -65,9 +70,6 @@ class Settings:
 
         # Update URL setting
         self.update_url = DEFAULT_UPDATE_URL
-
-        # Load saved settings if available
-        self.load()
 
     def _get_default_interface(self):
         """Get the first active non-loopback network interface as default"""
@@ -170,7 +172,7 @@ class Settings:
 
     def restore_defaults(self):
         """Reset all settings to default values"""
-        self.__init__()
+        self._set_defaults()
 
     def validate_settings(self):
         """Validate and fix settings values"""

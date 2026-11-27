@@ -97,6 +97,44 @@ class TestSettingsAndDetection(unittest.TestCase):
             self.assertTrue(dlg.isVisible())
             dlg.close()
 
+    def test_restore_defaults_resets_values(self):
+        settings = Settings()
+        settings.max_speed = 999
+        settings.speed_unit = "Kbps"
+        settings.show_upload_speed = True
+        settings.restore_defaults()
+        self.assertEqual(settings.max_speed, 100)
+        self.assertEqual(settings.speed_unit, "Mbps")
+        self.assertFalse(settings.show_upload_speed)
+
+    def test_system_tray_tooltip_sync(self):
+        from PyQt5.QtWidgets import QWidget
+        from speedview.ui.system_tray import SystemTray
+
+        class StubMain(QWidget):
+            def __init__(self):
+                super().__init__()
+                self.settings = Settings()
+                self.network_controller = NetworkController(selected_interface="eth1")
+            def toggle_float_mode(self): pass
+            def open_data_usage(self): pass
+            def open_settings(self): pass
+            def test_network(self): pass
+
+        main = StubMain()
+        main.settings.show_upload_speed = True
+        main.settings.speed_unit = "Mbps"
+        main.settings.selected_interface = "eth1"
+        main.network_controller.connection_status = "Connected"
+
+        tray = SystemTray(main)
+        tray.update_tray_icon(12.5)
+        tip = tray.tray_icon.toolTip()
+        self.assertIn("Upload: 12.50 Mbps", tip)
+        self.assertIn("Connected (eth1)", tip)
+        tray.hide()
+        main.close()
+
 
 if __name__ == '__main__':
     unittest.main()
