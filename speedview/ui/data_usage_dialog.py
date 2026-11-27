@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QShortcut, QApplication
 from PyQt5.QtSvg import QSvgWidget
-from PyQt5.QtCore import Qt, QByteArray, QTimer
+from PyQt5.QtCore import Qt, QByteArray, QTimer, pyqtSignal
 from PyQt5.QtGui import QKeySequence
 
 from speedview.models.data_usage import DataUsageTracker, format_bytes
@@ -11,6 +11,8 @@ from speedview.utils.svg_utils import apply_rounded_mask, update_data_usage_svg
 
 class DataUsageDialog(QWidget):
     """Frameless SVG-rendered Data Usage window showing Daily/Monthly & App | Data | Date."""
+
+    closed = pyqtSignal()
 
     def __init__(self, tracker=None, parent=None):
         super().__init__(parent)
@@ -125,6 +127,7 @@ class DataUsageDialog(QWidget):
 
     def closeEvent(self, event):
         self.refresh_timer.stop()
+        self.closed.emit()
         event.accept()
 
 

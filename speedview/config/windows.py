@@ -1,5 +1,6 @@
 import os
 import platform
+import sys
 
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -18,8 +19,8 @@ LOG_FILE = os.path.join(APPDATA_DIR, 'app.log')
 TEMP_DIR = os.path.join(APPDATA_DIR, 'temp')
 
 # Registry settings
-REG_PATH = r'Software\NetworkSpeedMeter'
-REG_AUTOSTART = 'AutoStart'
+REG_PATH = r'Software\Microsoft\Windows\CurrentVersion\Run'
+REG_AUTOSTART = 'SpeedView'
 
 # Update settings
 UPDATE_CHECK_INTERVAL = 24 * 60 * 60  # 24 hours in seconds
@@ -30,8 +31,8 @@ MIN_WIDTH = 400
 MIN_HEIGHT = 300
 DEFAULT_WIDTH = 500
 DEFAULT_HEIGHT = 500
-FLOATING_WIDTH = 200
-FLOATING_HEIGHT = 80
+FLOATING_WIDTH = 136
+FLOATING_HEIGHT = 40
 
 # System tray settings
 TRAY_ICON_SIZE = 16
@@ -42,26 +43,99 @@ INSTALL_DIR = os.path.join(_PROGRAMFILES_BASE, 'NetworkSpeedMeter')
 UNINSTALL_REG_PATH = r'Software\Microsoft\Windows\CurrentVersion\Uninstall\NetworkSpeedMeter'
 
 
-def set_autostart(enable=True):
-    """Set application to start with Windows"""
-    if not IS_WINDOWS or winreg is None:
-        return False
+def _get_launch_command():
+    """Return executable and script/arguments for launching SpeedView."""
+    if getattr(sys, 'frozen', False):
+        return sys.executable, []
+    main_py = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'main.py'))
+    return sys.executable, [main_py]
+
+
+def apply_startup_setting(enable=True):
+    """Enable or disable SpeedView automatic startup across Windows, Linux, and macOS."""
+    system = platform.system()
+    exe_path, args = _get_launch_command()
+
+    if system == "Windows" and winreg is not None:
+        try:
+            key = winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_SET_VALUE)
+            if enable:
+                cmd = f'"{exe_path}"' + (f' "{args[0]}"' if args else '')
+                winreg.SetValueEx(key, REG_AUTOSTART, 0, winreg.REG_SZ, cmd)
+            else:
+                try:
+                    winreg.DeleteValue(key, REG_AUTOSTART)
+                except FileNotFoundError:
+                    pass
+            return True
+        except Exception as e:
+            print(f"Error setting Windows autostart: {e}")
+            return False
+
+    if system == "Darwin":
+        try:
+            agents_dir = os.path.expanduser("~/Library/LaunchAgents")
+            plist_path = os.path.join(agents_dir, "com.speedview.app.plist")
+            if enable:
+                os.makedirs(agents_dir, exist_ok=True)
+                prog_args = "".join(f"        <string>{a}</string>\n" for a in [exe_path] + args)
+                plist_content = (
+                    '<?xml version="1.0" encoding="UTF-8"?>\n'
+                    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+                    '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+                    '<plist version="1.0">\n'
+                    '<dict>\n'
+                    '    <key>Label</key>\n'
+                    '    <string>com.speedview.app</string>\n'
+                    '    <key>ProgramArguments</key>\n'
+                    '    <array>\n'
+                    f'{prog_args}'
+                    '    </array>\n'
+                    '    <key>RunAtLoad</key>\n'
+                    '    <true/>\n'
+                    '</dict>\n'
+                    '</plist>\n'
+                )
+                with open(plist_path, "w", encoding="utf-8") as f:
+                    f.write(plist_content)
+            elif os.path.exists(plist_path):
+                os.remove(plist_path)
+            return True
+        except Exception as e:
+            print(f"Error setting macOS autostart: {e}")
+            return False
+
+    # Linux / XDG desktop autostart
     try:
-        key = winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, REG_PATH)
-        app_path = os.path.join(INSTALL_DIR, 'NetworkSpeedMeter.exe')
-
+        xdg_config = os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+        autostart_dir = os.path.join(xdg_config, "autostart")
+        desktop_file = os.path.join(autostart_dir, "speedview.desktop")
         if enable:
-            winreg.SetValueEx(key, REG_AUTOSTART, 0, winreg.REG_SZ, app_path)
-        else:
-            try:
-                winreg.DeleteValue(key, REG_AUTOSTART)
-            except FileNotFoundError:
-                pass
-
+            os.makedirs(autostart_dir, exist_ok=True)
+            exec_cmd = f'"{exe_path}"' + (f' "{args[0]}"' if args else '')
+            desktop_content = (
+                "[Desktop Entry]\n"
+                "Type=Application\n"
+                "Name=SpeedView\n"
+                "Comment=Network Speed Meter\n"
+                f"Exec={exec_cmd}\n"
+                "Terminal=false\n"
+                "Categories=Network;Utility;\n"
+                "X-GNOME-Autostart-enabled=true\n"
+            )
+            with open(desktop_file, "w", encoding="utf-8") as f:
+                f.write(desktop_content)
+        elif os.path.exists(desktop_file):
+            os.remove(desktop_file)
         return True
     except Exception as e:
-        print(f"Error setting autostart: {e}")
+        print(f"Error setting Linux autostart: {e}")
         return False
+
+
+def set_autostart(enable=True):
+    """Set application to start on system boot."""
+    return apply_startup_setting(enable)
 
 
 def create_uninstall_reg_key():

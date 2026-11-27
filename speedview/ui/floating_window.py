@@ -1,5 +1,5 @@
 import logging
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QShortcut
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QShortcut, QApplication
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt, QTimer, QByteArray, pyqtSignal
 from PyQt5.QtGui import QKeySequence
@@ -36,13 +36,14 @@ class FloatingWindow(QWidget):
         self.update_display()
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setWindowOpacity(0.88)
         self.setStyleSheet("background: transparent;")
 
     def setup_ui(self):
-        """Initialize the UI components"""
+        """Initialize the compact transparent UI (signal + speed only)."""
         self.setWindowTitle("SpeedView - Floating Mode")
-        self.setFixedSize(184, 56)
-        apply_rounded_mask(self, 0, 0, 184, 56, radius=18)
+        self.setFixedSize(136, 40)
+        apply_rounded_mask(self, 0, 0, 136, 40, radius=14)
 
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -52,23 +53,28 @@ class FloatingWindow(QWidget):
         self.svg_widget.setStyleSheet("background: transparent;")
         self.layout.addWidget(self.svg_widget)
         self.svg_widget.mousePressEvent = self.handle_svg_mouse_press
+        self.position_in_corner()
+
+    def position_in_corner(self, margin=16):
+        """Anchor the floating widget in the bottom-right corner of the primary screen."""
+        app = QApplication.instance()
+        if app is None:
+            return
+        screen = app.primaryScreen()
+        if screen is not None:
+            avail = screen.availableGeometry()
+        else:
+            avail = app.desktop().availableGeometry()
+        x = avail.right() - self.width() - margin
+        y = avail.bottom() - self.height() - margin
+        self.move(max(avail.left(), x), max(avail.top(), y))
 
     def setup_shortcuts(self):
         """Configure keyboard shortcuts"""
         QShortcut(QKeySequence("Esc"), self, self.close)
 
-    def _get_connection_info(self):
-        selected_iface = getattr(self.settings, 'selected_interface', None)
-        try:
-            return self.network_controller.get_connection_info(selected_iface, use_cache=True)
-        except TypeError:
-            try:
-                return self.network_controller.get_connection_info(selected_iface)
-            except TypeError:
-                return self.network_controller.get_connection_info()
-
     def update_display(self, forced_speeds=None):
-        """Update the display with current network stats"""
+        """Update the display with current signal strength and speed."""
         if forced_speeds is not None:
             download_speed, upload_speed = forced_speeds
         else:
@@ -83,18 +89,11 @@ class FloatingWindow(QWidget):
         display_speed = upload_speed if getattr(self.settings, 'show_upload_speed', False) else download_speed
 
         signal_strength = getattr(self.network_controller, 'signal_strength', 0)
-        try:
-            connection_type, band = self._get_connection_info()
-        except Exception:
-            logging.exception("Failed to get connection info in FloatingWindow")
-            connection_type, band = "Unknown", ""
 
         svg_content = update_floating_svg(
             FLOATING_SVG_TEMPLATE,
             speed=display_speed,
             signal_strength=signal_strength,
-            connection_type=connection_type,
-            band=band,
             speed_unit=getattr(self.settings, 'speed_unit', 'Mbps'),
         )
         self.svg_widget.load(QByteArray(svg_content.encode('utf-8')))
@@ -107,23 +106,27 @@ class FloatingWindow(QWidget):
         """Slot to handle connection status updates from network controller."""
         self.update_display()
 
+    def showEvent(self, event):
+        self.position_in_corner()
+        super().showEvent(event)
+
     def handle_svg_mouse_press(self, event):
-        """Handle mouse press events for dragging and buttons with proper coordinate mapping"""
+        """Handle mouse press events for dragging and buttons with proper coordinate mapping."""
         if event.button() == Qt.LeftButton:
             pos = event.pos()
             widget_width = max(1, self.svg_widget.width())
             widget_height = max(1, self.svg_widget.height())
-            svg_x = pos.x() * (184.0 / widget_width)
-            svg_y = pos.y() * (56.0 / widget_height)
+            svg_x = pos.x() * (136.0 / widget_width)
+            svg_y = pos.y() * (40.0 / widget_height)
 
-            # Close button at (168, 16) -> minimize to tray
-            if (svg_x - 168) ** 2 + (svg_y - 16) ** 2 <= 100:
+            # Close button at (122, 20) -> minimize to tray
+            if (svg_x - 122) ** 2 + (svg_y - 20) ** 2 <= 81:
                 self.close()
                 event.accept()
                 return
 
-            # Expand button at (16, 16) -> expand back to main window
-            if (svg_x - 16) ** 2 + (svg_y - 16) ** 2 <= 100:
+            # Expand button at (103, 20) -> expand back to main window
+            if (svg_x - 103) ** 2 + (svg_y - 20) ** 2 <= 81:
                 self.settings.is_floating = False
                 self.expand_requested.emit()
                 self.close()

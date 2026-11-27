@@ -21,6 +21,7 @@ from PyQt5.QtCore import Qt
 import psutil
 
 from speedview.config.config import APP_VERSION, DEFAULT_RELEASES_PAGE_URL
+from speedview.config.windows import apply_startup_setting
 from speedview.update.updater import UpdateChecker
 
 
@@ -407,6 +408,10 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout()
         layout.setSpacing(8)
 
+        self.start_on_startup_checkbox = QCheckBox("Start SpeedView automatically on system startup")
+        self.start_on_startup_checkbox.setToolTip("Launch SpeedView automatically when you log in")
+        layout.addWidget(self.start_on_startup_checkbox)
+
         self.start_minimized_checkbox = QCheckBox("Start minimized in system tray on launch")
         self.start_minimized_checkbox.setToolTip("Start the application hidden in the system tray")
         layout.addWidget(self.start_minimized_checkbox)
@@ -493,6 +498,7 @@ class SettingsDialog(QDialog):
             if idx >= 0:
                 self.network_interface_combo.setCurrentIndex(idx)
 
+        self.start_on_startup_checkbox.setChecked(bool(getattr(self.settings, 'start_on_startup', False)))
         self.start_minimized_checkbox.setChecked(bool(self.settings.start_minimized))
         self.minimize_to_tray_checkbox.setChecked(bool(self.settings.minimize_to_tray))
         self.close_to_tray_checkbox.setChecked(bool(self.settings.close_to_tray))
@@ -551,6 +557,7 @@ class SettingsDialog(QDialog):
         self.settings.max_upload = self.max_upload_input.value()
         self.settings.update_interval = self.update_interval_input.value()
         self.settings.speed_unit = self.speed_unit_combo.currentText()
+        self.settings.start_on_startup = self.start_on_startup_checkbox.isChecked()
         self.settings.start_minimized = self.start_minimized_checkbox.isChecked()
         self.settings.minimize_to_tray = self.minimize_to_tray_checkbox.isChecked()
         self.settings.close_to_tray = self.close_to_tray_checkbox.isChecked()
@@ -558,6 +565,7 @@ class SettingsDialog(QDialog):
         self.settings.enable_notifications = self.enable_notifications_checkbox.isChecked()
         self.settings.notification_threshold = self.notification_threshold.value()
         self.settings.update_url = self.update_url_input.text().strip()
+        apply_startup_setting(bool(self.settings.start_on_startup))
 
     def save_settings(self):
         """Save dialog values back to settings object."""

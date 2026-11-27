@@ -23,6 +23,7 @@ from speedview.utils.svg_utils import (
     update_svg_speed,
     update_svg_connection_status,
     update_svg_signal_strength,
+    update_svg_ping,
 )
 from speedview.controllers.network_controller import NetworkController
 from speedview.controllers.speed_controller import SpeedController
@@ -50,6 +51,7 @@ class MainWindow(QWidget):
         self.last_speeds = (0.0, 0.0)
         self._last_threshold_alert = 0.0
         self._force_quit = False
+        self._suppress_child_float = False
 
         app = QApplication.instance()
         if app is not None:
@@ -64,7 +66,7 @@ class MainWindow(QWidget):
             self.network_controller.check_connection_status()
             self.connection_timer = QTimer(self)
             self.connection_timer.timeout.connect(self.network_controller.check_connection_status)
-            self.connection_timer.start(5000)
+            self.connection_timer.start(3000)
 
         self.update_display()
 
@@ -116,6 +118,11 @@ class MainWindow(QWidget):
             self.network_controller.connection_updated.connect(self.on_connection_updated)
         if hasattr(self.network_controller, 'signal_strength_updated'):
             self.network_controller.signal_strength_updated.connect(self.on_signal_strength_updated)
+        try:
+            if hasattr(self.network_controller, 'latency_updated'):
+                self.network_controller.latency_updated.connect(self.on_latency_updated)
+        except RuntimeError:
+            pass
 
     def setup_shortcuts(self):
         """Setup keyboard shortcuts"""
@@ -208,6 +215,9 @@ class MainWindow(QWidget):
         strength = getattr(self.network_controller, 'signal_strength', 0)
         svg_content = update_svg_signal_strength(svg_content, strength)
 
+        latency_ms = getattr(self.network_controller, 'latency_ms', None)
+        svg_content = update_svg_ping(svg_content, latency_ms)
+
         self.svg_widget.load(QByteArray(svg_content.encode('utf-8')))
 
         if self.tray is not None:
@@ -243,6 +253,9 @@ class MainWindow(QWidget):
         self.update_display()
 
     def on_signal_strength_updated(self, strength):
+        self.update_display()
+
+    def on_latency_updated(self, latency_ms):
         self.update_display()
 
     def update_connection_display(self):
@@ -322,6 +335,7 @@ class MainWindow(QWidget):
         """Open the SVG Data Usage window showing App | Data | Date and Daily/Monthly totals."""
         if self._usage_dialog is None:
             self._usage_dialog = DataUsageDialog(tracker=self.data_usage_tracker, parent=None)
+            self._usage_dialog.closed.connect(self._on_child_closed_open_float)
         else:
             self._usage_dialog.refresh_display()
         self._usage_dialog.show()
@@ -343,6 +357,7 @@ class MainWindow(QWidget):
             return
 
         self._test_dialog = TestNetworkDialog(self)
+        self._test_dialog.closed.connect(self._on_child_closed_open_float)
         self._test_dialog.set_status("Running speed test...")
         self._test_dialog.show()
         self._test_dialog.raise_()
@@ -446,6 +461,13 @@ class MainWindow(QWidget):
             self.floating_window = None
             self.show()
 
+    def _on_child_closed_open_float(self):
+        """Closing any secondary window opens the Float gadget instead of stranding or quitting."""
+        if self._force_quit or self._suppress_child_float:
+            return
+        self.ensure_tray_visible()
+        self.toggle_float_mode(force=True)
+
     def _on_floating_closed(self):
         """When Float widget is closed, minimize to tray and keep running in background."""
         self.floating_window = None
@@ -467,6 +489,7 @@ class MainWindow(QWidget):
     def force_quit(self):
         """Explicitly shut down background monitoring and exit the application."""
         self._force_quit = True
+        self._suppress_child_float = True
         self.close()
         app = QApplication.instance()
         if app is not None:
@@ -487,6 +510,7 @@ class MainWindow(QWidget):
             self.toggle_float_mode(force=True)
             return
 
+        self._suppress_child_float = True
         if hasattr(self, 'connection_timer'):
             self.connection_timer.stop()
         if self.tray is not None and hasattr(self.tray, 'hide'):

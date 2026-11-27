@@ -55,6 +55,7 @@ class NetworkController(QObject):
 
     connection_updated = pyqtSignal(str, int)  # status, signal_strength
     signal_strength_updated = pyqtSignal(int)  # signal_strength (0-100)
+    latency_updated = pyqtSignal(object)  # latency_ms (int or None)
     speed_test_progress = pyqtSignal(str, float, float)  # status, download_mbps, upload_mbps
     speed_test_complete = pyqtSignal(float, float)  # download_speed, upload_speed
     speed_test_failed = pyqtSignal(str)  # error_message
@@ -74,6 +75,7 @@ class NetworkController(QObject):
         self.selected_interface = selected_interface
         self.connection_status = "Checking..."
         self.signal_strength = 0
+        self.latency_ms = None
         self.interface_details = {}
         self.updating = False
         self.testing = False
@@ -105,26 +107,38 @@ class NetworkController(QObject):
             self.updating = False
 
     def _check_connection_thread(self):
-        """Thread to check connection status and real interface details"""
+        """Thread to check connection status, real-time ping latency, and interface details"""
         status = "Disconnected"
-        try:
-            with socket.create_connection(("8.8.8.8", 53), timeout=3):
+        latency_ms = None
+        for host in ("8.8.8.8", "1.1.1.1"):
+            try:
+                t0 = time.perf_counter()
+                with socket.create_connection((host, 53), timeout=3):
+                    t1 = time.perf_counter()
                 status = "Connected"
-        except (TimeoutError, OSError):
-            status = "Disconnected"
-        except Exception as e:
-            print(f"Unexpected error during network check: {e}")
-            status = "Disconnected"
+                latency_ms = max(1, int(round((t1 - t0) * 1000.0)))
+                break
+            except (TimeoutError, OSError):
+                continue
+            except Exception as e:
+                print(f"Unexpected error during network check: {e}")
+                continue
 
         details = self.get_interface_details(self.selected_interface, connected=(status == "Connected"))
         strength = details.get("signal_strength", 0)
+        latency_changed = latency_ms != self.latency_ms
 
         changed = (
             status != self.connection_status
             or strength != self.signal_strength
             or details != self.interface_details
+            or latency_changed
         )
         self.interface_details = details
+        self.latency_ms = latency_ms
+
+        if latency_changed and hasattr(self, "latency_updated") and hasattr(self.latency_updated, "emit"):
+            self.latency_updated.emit(latency_ms)
 
         if changed:
             self.connection_status = status

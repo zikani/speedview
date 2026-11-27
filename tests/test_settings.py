@@ -10,6 +10,7 @@ from speedview.ui.data_usage_dialog import DataUsageDialog
 from speedview.controllers.network_controller import NetworkController
 from speedview.utils.svg_utils import (
     update_svg_speed,
+    update_svg_ping,
     update_test_network_svg,
     update_floating_svg,
     update_data_usage_svg,
@@ -52,20 +53,28 @@ class TestSettingsAndDetection(unittest.TestCase):
     def test_svg_updates_in_memory(self):
         self.assertIn("USAGE", MAIN_SVG_TEMPLATE)
         self.assertNotIn("HISTORY", MAIN_SVG_TEMPLATE)
+        self.assertIn('id="pingBadge"', MAIN_SVG_TEMPLATE)
+        self.assertIn('M19.4 15', MAIN_SVG_TEMPLATE)  # Gear cogwheel icon path
 
         main_svg = update_svg_speed(MAIN_SVG_TEMPLATE, speed=25.0, max_speed=100, speed_unit="Mbps")
         self.assertIn("25.00", main_svg)
         self.assertIn("Mbps", main_svg)
+
+        ping_svg = update_svg_ping(main_svg, 24)
+        self.assertIn("24 ms", ping_svg)
+        ping_off_svg = update_svg_ping(main_svg, None)
+        self.assertIn("-- ms", ping_off_svg)
 
         test_svg = update_test_network_svg(TEST_NETWORK_SVG, "Test Complete!", 42.5, 11.25)
         self.assertIn("42.50 Mbps", test_svg)
         self.assertIn("11.25 Mbps", test_svg)
         self.assertIn("Test Complete!", test_svg)
 
-        float_svg = update_floating_svg(FLOATING_SVG_TEMPLATE, 12.3, 100, "Ethernet", "1000 Mbps")
+        float_svg = update_floating_svg(FLOATING_SVG_TEMPLATE, 12.3, 100)
         self.assertIn("12.3", float_svg)
-        self.assertIn("Ethernet", float_svg)
-        self.assertIn("1000 Mbps", float_svg)
+        self.assertIn('id="signalBars"', float_svg)
+        self.assertNotIn('id="connectionType"', float_svg)
+        self.assertIn('fill-opacity="0.52"', float_svg)
 
     def test_data_usage_tracker_and_svg_dialog(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -205,11 +214,16 @@ class TestSettingsAndDetection(unittest.TestCase):
         self.assertFalse(mw.isVisible())
         self.assertTrue(mw.tray.shown)
 
-        # 2. Close MainWindow -> opens compact Float widget (184x56) and hides MainWindow
+        # 2. Close MainWindow -> opens compact transparent Float widget (136x40) in corner and hides MainWindow
         mw.show()
         mw.close()
         self.assertIsNotNone(mw.floating_window)
-        self.assertEqual((mw.floating_window.width(), mw.floating_window.height()), (184, 56))
+        self.assertEqual((mw.floating_window.width(), mw.floating_window.height()), (136, 40))
+        self.assertTrue(mw.floating_window.testAttribute(Qt.WA_TranslucentBackground))
+        self.assertLess(mw.floating_window.windowOpacity(), 1.0)
+        avail = self._app.primaryScreen().availableGeometry()
+        self.assertGreaterEqual(mw.floating_window.x(), avail.right() - 136 - 40)
+        self.assertGreaterEqual(mw.floating_window.y(), avail.bottom() - 40 - 40)
         self.assertFalse(mw.isVisible())
 
         # 3. Close Float widget -> stays minimized in tray (background)
@@ -217,20 +231,51 @@ class TestSettingsAndDetection(unittest.TestCase):
         self.assertIsNone(mw.floating_window)
         self.assertFalse(mw.isVisible())
 
-        # 4. Usage button -> opens DataUsageDialog and closes/hides MainWindow
+        # 4. Usage button -> opens DataUsageDialog and hides MainWindow; closing DataUsageDialog opens Float!
         mw.show()
         mw.open_data_usage(close_main=True)
         self.assertFalse(mw.isVisible())
         self.assertIsNotNone(mw._usage_dialog)
         self.assertTrue(mw._usage_dialog.isVisible())
+        mw._usage_dialog.close()
+        self.assertIsNotNone(mw.floating_window)
+        mw.floating_window.close()
 
-        # 5. SettingsDialog does NOT inherit MainWindow transparent background
+        # 5. Closing TestNetworkDialog also opens Float widget
+        mw.show()
+        mw.test_network()
+        self.assertIsNotNone(mw._test_dialog)
+        mw._test_dialog.close()
+        self.assertIsNotNone(mw.floating_window)
+        self.assertFalse(mw.isVisible())
+        mw.floating_window.close()
+
+        # 6. SettingsDialog does NOT inherit MainWindow transparent background & has start_on_startup checkbox
         dlg = SettingsDialog(parent=mw, settings=settings)
         self.assertFalse(dlg.testAttribute(Qt.WA_TranslucentBackground))
         self.assertIn("#0B1220", dlg.styleSheet())
+        self.assertTrue(hasattr(dlg, "start_on_startup_checkbox"))
         dlg.close()
 
         mw.force_quit()
+
+    def test_start_on_startup_registration(self):
+        from speedview.config.windows import apply_startup_setting
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            old_xdg = os.environ.get("XDG_CONFIG_HOME")
+            os.environ["XDG_CONFIG_HOME"] = tmpdir
+            try:
+                self.assertTrue(apply_startup_setting(True))
+                desktop_path = os.path.join(tmpdir, "autostart", "speedview.desktop")
+                self.assertTrue(os.path.exists(desktop_path))
+                self.assertTrue(apply_startup_setting(False))
+                self.assertFalse(os.path.exists(desktop_path))
+            finally:
+                if old_xdg is None:
+                    os.environ.pop("XDG_CONFIG_HOME", None)
+                else:
+                    os.environ["XDG_CONFIG_HOME"] = old_xdg
 
 
 if __name__ == '__main__':

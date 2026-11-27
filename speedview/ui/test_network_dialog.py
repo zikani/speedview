@@ -1,13 +1,15 @@
 import sys
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QShortcut, QApplication
 from PyQt5.QtSvg import QSvgWidget
-from PyQt5.QtCore import Qt, QByteArray
+from PyQt5.QtCore import Qt, QByteArray, pyqtSignal
 from PyQt5.QtGui import QKeySequence
 from speedview.utils.svg_utils import apply_rounded_mask, update_test_network_svg
 from speedview.ui.resources.svg_templates import TEST_NETWORK_SVG
 
 
 class TestNetworkDialog(QWidget):
+    closed = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.test_in_progress = False
@@ -86,6 +88,10 @@ class TestNetworkDialog(QWidget):
 
     def setup_shortcuts(self):
         QShortcut(QKeySequence("Esc"), self, self.close)
+
+    def closeEvent(self, event):
+        self.closed.emit()
+        event.accept()
 
 
 if __name__ == "__main__":

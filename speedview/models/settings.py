@@ -8,6 +8,7 @@ from speedview.config.config import (
     DEFAULT_MAX_SPEED,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_START_MINIMIZED,
+    DEFAULT_START_ON_STARTUP,
     DEFAULT_MINIMIZE_TO_TRAY,
     DEFAULT_SHOW_UPLOAD_SPEED,
     DEFAULT_CLOSE_TO_TRAY,
@@ -53,6 +54,7 @@ class Settings:
 
         # UI settings
         self.start_minimized = DEFAULT_START_MINIMIZED
+        self.start_on_startup = DEFAULT_START_ON_STARTUP
         self.minimize_to_tray = DEFAULT_MINIMIZE_TO_TRAY
         self.close_to_tray = DEFAULT_CLOSE_TO_TRAY
         self.show_upload_speed = DEFAULT_SHOW_UPLOAD_SPEED
@@ -137,6 +139,7 @@ class Settings:
                 'auto_select_interface': self.auto_select_interface,
                 'selected_interface': self.selected_interface,
                 'start_minimized': self.start_minimized,
+                'start_on_startup': self.start_on_startup,
                 'minimize_to_tray': self.minimize_to_tray,
                 'close_to_tray': self.close_to_tray,
                 'show_upload_speed': self.show_upload_speed,

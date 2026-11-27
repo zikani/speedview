@@ -156,14 +156,13 @@ MAIN_SVG_TEMPLATE = """
     <path d="M468 20 L476 28 M476 20 L468 28" stroke="#FF8CA1" stroke-width="1.8" stroke-linecap="round"/>
   </g>
 
-  <!-- Settings button -->
-  <g id="settingsIcon" transform="translate(420 50)" class="button" opacity="0.9">
+  <!-- Settings button (cogwheel gear icon) -->
+  <g id="settingsIcon" transform="translate(420 50)" class="button" opacity="0.95">
     <circle cx="30" cy="30" r="20" fill="#FFFFFF" fill-opacity="0.05" stroke="#FFFFFF" stroke-opacity="0.14" stroke-width="1"/>
-    <circle cx="30" cy="30" r="7" fill="none" stroke="#7DD3FC" stroke-width="2"/>
-    <path d="M30 16.5 L30 19.5 M30 40.5 L30 43.5 M16.5 30 L19.5 30 M40.5 30 L43.5 30
-             M20.45 20.45 L22.58 22.58 M39.55 20.45 L37.42 22.58 M20.45 39.55 L22.58 37.42 M39.55 39.55 L37.42 37.42"
-          stroke="#7DD3FC" stroke-width="2" stroke-linecap="round" fill="none"/>
-    <circle cx="30" cy="30" r="2.5" fill="#22D3EE"/>
+    <g transform="translate(18 18)" fill="none" stroke="#7DD3FC" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" fill="#0B1220" stroke="#22D3EE"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+    </g>
   </g>
 
   <!-- Signal strength indicator -->
@@ -178,6 +177,14 @@ MAIN_SVG_TEMPLATE = """
   <text id="connectionStatus" x="76" y="58" text-anchor="start" font-size="14" font-weight="700" fill="#F2F6FF">Checking...</text>
   <text id="networkType" x="76" y="76" text-anchor="start" font-size="12" font-weight="500" fill="#8FA3C9">Detecting interface...</text>
   <text id="networkMeta" x="250" y="384" text-anchor="middle" font-size="11" fill="#6B7A9E"></text>
+
+  <!-- Real-time ping/latency badge next to speed gauge -->
+  <g id="pingBadge">
+    <rect x="408" y="346" width="76" height="38" rx="10" fill="#FFFFFF" fill-opacity="0.05" stroke="#22D3EE" stroke-opacity="0.22" stroke-width="1"/>
+    <circle id="pingDot" cx="422" cy="358" r="3" fill="#2EE6A6"/>
+    <text x="429" y="361" text-anchor="start" font-size="9.5" font-weight="700" letter-spacing="0.8" fill="#8FA3C9">PING</text>
+    <text id="pingValue" x="446" y="377" text-anchor="middle" font-size="13" font-weight="700" fill="#2EE6A6">-- ms</text>
+  </g>
 
   <!-- Test Network button (primary) -->
   <g id="testButtonGroup" class="interactive-button">
@@ -199,68 +206,54 @@ MAIN_SVG_TEMPLATE = """
 </svg>
 """
 
-# Floating mode SVG template (compact mini widget)
+# Floating mode SVG template (compact transparent corner pill: signal + speed only)
 FLOATING_SVG_TEMPLATE = """
-<svg width="184" height="56" viewBox="0 0 184 56" xmlns="http://www.w3.org/2000/svg"
+<svg width="136" height="40" viewBox="0 0 136 40" xmlns="http://www.w3.org/2000/svg"
      font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
   <defs>
-    <linearGradient id="darkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#101A2B" />
-      <stop offset="100%" stop-color="#060A12" />
-    </linearGradient>
-
     <linearGradient id="speedTextGradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#8CFFD6" />
       <stop offset="100%" stop-color="#2EE6A6" />
     </linearGradient>
 
     <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur" />
       <feMerge>
         <feMergeNode in="blur" />
         <feMergeNode in="SourceGraphic" />
       </feMerge>
     </filter>
-
-    <filter id="shadow">
-      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#2EE6A6" flood-opacity="0.20"/>
-    </filter>
   </defs>
 
   <g transform="translate(0, 0)">
-    <rect width="184" height="56" rx="18" ry="18" fill="url(#darkGradient)" filter="url(#shadow)" />
-    <rect x="0.5" y="0.5" width="183" height="55" rx="17.5" ry="17.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.09" />
+    <rect width="136" height="40" rx="14" ry="14" fill="#0B1324" fill-opacity="0.52" />
+    <rect x="0.5" y="0.5" width="135" height="39" rx="13.5" ry="13.5" fill="none" stroke="#22D3EE" stroke-opacity="0.34" stroke-width="1" />
 
-    <!-- Dividers -->
-    <line x1="84" y1="14" x2="84" y2="42" stroke="#FFFFFF" stroke-width="1" opacity="0.08" />
-    <line x1="121" y1="14" x2="121" y2="42" stroke="#FFFFFF" stroke-width="1" opacity="0.08" />
-
-    <!-- Speed value -->
-    <text id="speedValue" x="50" y="33" font-size="19" font-weight="700" fill="url(#speedTextGradient)" text-anchor="middle" filter="url(#glow)">0.0</text>
-    <text id="speedUnit" x="50" y="47" font-size="9.5" font-weight="500" fill="#8FA3C9" text-anchor="middle">Mbps</text>
-
-    <!-- Signal strength bars -->
-    <g transform="translate(92, 20)">
-      <rect class="signal-bar" x="0" y="9" width="4" height="8" rx="2" fill="#2EE6A6" opacity="0.95"/>
-      <rect class="signal-bar" x="6" y="6" width="4" height="11" rx="2" fill="#2EE6A6" opacity="0.95"/>
-      <rect class="signal-bar" x="12" y="3" width="4" height="14" rx="2" fill="#2EE6A6" opacity="0.95"/>
-      <rect class="signal-bar" x="18" y="0" width="4" height="17" rx="2" fill="#2EE6A6" opacity="0.3"/>
+    <!-- Signal strength bars (only signal + speed) -->
+    <g id="signalBars" transform="translate(10, 11)">
+      <rect class="signal-bar" x="0" y="10" width="3.5" height="7" rx="1.5" fill="#2EE6A6" opacity="0.95"/>
+      <rect class="signal-bar" x="5.5" y="7" width="3.5" height="10" rx="1.5" fill="#2EE6A6" opacity="0.95"/>
+      <rect class="signal-bar" x="11" y="4" width="3.5" height="13" rx="1.5" fill="#2EE6A6" opacity="0.95"/>
+      <rect class="signal-bar" x="16.5" y="0" width="3.5" height="17" rx="1.5" fill="#2EE6A6" opacity="0.3"/>
     </g>
 
-    <!-- Real connection info -->
-    <text id="connectionType" x="148" y="31" font-size="10.5" font-weight="700" fill="#E6FFF6" text-anchor="middle">--</text>
-    <text id="connectionBand" x="148" y="44" font-size="8.5" font-weight="500" fill="#8FA3C9" text-anchor="middle"></text>
+    <!-- Divider -->
+    <line x1="35" y1="9" x2="35" y2="31" stroke="#FFFFFF" stroke-width="1" opacity="0.12" />
+
+    <!-- Speed value & unit -->
+    <text id="speedValue" x="64" y="22" font-size="16" font-weight="700" fill="url(#speedTextGradient)" text-anchor="middle" filter="url(#glow)">0.0</text>
+    <text id="speedUnit" x="64" y="34" font-size="8.5" font-weight="600" fill="#8FA3C9" text-anchor="middle">Mbps</text>
 
     <!-- Expand button -->
-    <g id="expandButton" class="button" transform="translate(16, 16)">
-      <circle cx="0" cy="0" r="7.5" fill="#FFFFFF" fill-opacity="0.06" stroke="#2EE6A6" stroke-opacity="0.55" stroke-width="1" />
-      <path d="M-3,0 L3,0 M0,-3 L0,3" stroke="#8CFFD6" stroke-width="1.5" stroke-linecap="round" />
+    <g id="expandButton" class="button" transform="translate(103, 20)">
+      <circle cx="0" cy="0" r="6.5" fill="#FFFFFF" fill-opacity="0.08" stroke="#2EE6A6" stroke-opacity="0.55" stroke-width="1" />
+      <path d="M-2.6,0 L2.6,0 M0,-2.6 L0,2.6" stroke="#8CFFD6" stroke-width="1.4" stroke-linecap="round" />
     </g>
 
     <!-- Close button (minimize to tray) -->
-    <g id="closeButton" class="button" transform="translate(168, 16)">
-      <circle cx="0" cy="0" r="7.5" fill="#FFFFFF" fill-opacity="0.06" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="1" />
-      <path d="M-2.8,-2.8 L2.8,2.8 M-2.8,2.8 L2.8,-2.8" stroke="#CBD5F5" stroke-width="1.5" stroke-linecap="round" />
+    <g id="closeButton" class="button" transform="translate(122, 20)">
+      <circle cx="0" cy="0" r="6.5" fill="#FF5C7A" fill-opacity="0.12" stroke="#FF5C7A" stroke-opacity="0.55" stroke-width="1" />
+      <path d="M-2.3,-2.3 L2.3,2.3 M-2.3,2.3 L2.3,-2.3" stroke="#FF8CA1" stroke-width="1.4" stroke-linecap="round" />
     </g>
   </g>
 </svg>
