@@ -1,7 +1,15 @@
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QProgressBar, 
-                           QLabel, QPushButton, QMessageBox)
+import platform
+from PyQt5.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QProgressBar,
+    QLabel,
+    QPushButton,
+    QMessageBox,
+)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from ..update.updater import UpdateChecker
+
 
 class UpdateWorker(QThread):
     progress = pyqtSignal(float)
@@ -24,32 +32,35 @@ class UpdateWorker(QThread):
         except Exception as e:
             self.error.emit(str(e))
 
+
 class UpdateDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, settings=None):
         super().__init__(parent)
-        self.updater = UpdateChecker()
+        self.updater = UpdateChecker(settings=settings)
         self.init_ui()
         self.check_for_updates()
 
     def init_ui(self):
         self.setWindowTitle("Software Update")
-        self.setFixedSize(400, 150)
+        self.setFixedSize(400, 160)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-        
+
         layout = QVBoxLayout()
-        
+
         self.status_label = QLabel("Checking for updates...")
+        self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
-        
+
         self.progress_bar = QProgressBar()
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
-        
-        self.update_button = QPushButton("Update Now")
+
+        action_label = "Update Now" if platform.system() == "Windows" else "Open Release Page"
+        self.update_button = QPushButton(action_label)
         self.update_button.clicked.connect(self.start_update)
         self.update_button.hide()
         layout.addWidget(self.update_button)
-        
+
         self.setLayout(layout)
 
     def check_for_updates(self):
@@ -65,10 +76,15 @@ class UpdateDialog(QDialog):
             self.close()
 
     def start_update(self):
+        if platform.system() != "Windows":
+            self.updater.open_release_page()
+            self.accept()
+            return
+
         self.update_button.setEnabled(False)
         self.progress_bar.show()
         self.status_label.setText("Downloading update...")
-        
+
         self.worker = UpdateWorker(self.updater)
         self.worker.progress.connect(self.update_progress)
         self.worker.finished.connect(self.install_update)
@@ -80,13 +96,13 @@ class UpdateDialog(QDialog):
 
     def install_update(self, update_file):
         reply = QMessageBox.question(
-            self, 
+            self,
             'Install Update',
             'The update has been downloaded. Install now?\n'
             'The application will restart automatically.',
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No,
         )
-        
+
         if reply == QMessageBox.Yes:
             if self.updater.install_update(update_file):
                 self.accept()

@@ -22,7 +22,8 @@ DEFAULT_SHOW_HELP = True
 DEFAULT_SHOW_ABOUT = True
 
 # Update URL for the update checker
-DEFAULT_UPDATE_URL = "https://api.github.com/repos/yourusername/network-speed-meter/releases/latest"
+DEFAULT_UPDATE_URL = "https://api.github.com/repos/zikani/speedview/releases/latest"
+DEFAULT_RELEASES_PAGE_URL = "https://github.com/zikani/speedview/releases"
 
 # File paths
 _CONFIG_BASE_DIR = os.getenv("APPDATA") or os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")

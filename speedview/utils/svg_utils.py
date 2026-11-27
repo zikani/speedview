@@ -1,185 +1,314 @@
-import re
+import math
 import os
+import re
 import logging
 import tempfile
+from xml.sax.saxutils import escape
 from speedview.config.config import TEMP_SVG_FILE
 
-def update_svg_speed(svg_template, speed, max_speed, show_upload=False, angle=None):
-    """Update the speed value and angle in SVG template"""
+
+def convert_speed(speed_mbps, unit="Mbps"):
+    """Convert speed from Mbps to requested display unit."""
+    val = max(0.0, float(speed_mbps or 0.0))
+    if unit == "MB/s":
+        return val / 8.0
+    if unit == "Kbps":
+        return val * 1000.0
+    return val
+
+
+def _format_scale_label(value):
+    if value >= 100:
+        return f"{int(round(value))}"
+    if value >= 10:
+        return f"{value:.0f}"
+    if value == 0:
+        return "0"
+    return f"{value:.1f}"
+
+
+def _build_arc_path(start_deg, end_deg, cx=250, cy=250, r=170):
+    """Build SVG arc path from start_deg to end_deg (0 deg = top/12 o'clock, clockwise)."""
+    if end_deg <= start_deg + 0.5:
+        return ""
+    start_rad = math.radians(start_deg - 90)
+    end_rad = math.radians(end_deg - 90)
+    x1 = cx + r * math.cos(start_rad)
+    y1 = cy + r * math.sin(start_rad)
+    x2 = cx + r * math.cos(end_rad)
+    y2 = cy + r * math.sin(end_rad)
+    large_arc = 1 if (end_deg - start_deg) > 180 else 0
+    return f"M {x1:.1f} {y1:.1f} A {r} {r} 0 {large_arc} 1 {x2:.1f} {y2:.1f}"
+
+
+def update_svg_speed(svg_template, speed, max_speed, show_upload=False, angle=None, speed_unit="Mbps"):
+    """Update the speed value, unit, needle angle, active arc, and dial markings in SVG template."""
+    raw_speed = max(0.0, float(speed or 0.0))
+    safe_max = max(1.0, float(max_speed or 100.0))
+
     if angle is None:
-        # Calculate angle based on speed and max speed
-        angle = -135 + (speed / max_speed) * 270
-        angle = max(min(angle, 135), -135)
-    
-    # Update speed text
-    speed_label = f"{speed:.2f}"
+        angle = -135.0 + (raw_speed / safe_max) * 270.0
+        angle = max(min(angle, 135.0), -135.0)
+
+    display_speed = convert_speed(raw_speed, speed_unit)
+    display_max = convert_speed(safe_max, speed_unit)
+    speed_label = f"{display_speed:.1f}" if speed_unit == "Kbps" and display_speed >= 100 else f"{display_speed:.2f}"
+
     updated_svg = re.sub(
         r'<text id="speedValue".*?>.*?</text>',
         f'<text id="speedValue" x="250" y="300" text-anchor="middle" '
         f'font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#00F0FF" filter="url(#glowEffect)">{speed_label}</text>',
-        svg_template
+        svg_template,
     )
-    
-    # Update needle angle
+
+    updated_svg = re.sub(
+        r'<text id="speedUnit".*?>.*?</text>',
+        f'<text id="speedUnit" x="250" y="336" text-anchor="middle" '
+        f'font-family="Arial, sans-serif" font-size="22" fill="#00F0FF" opacity="0.8">{escape(speed_unit)}</text>',
+        updated_svg,
+    )
+
+    type_text = "Upload" if show_upload else "Download"
+    updated_svg = re.sub(
+        r'<text id="speedType".*?>.*?</text>',
+        f'<text id="speedType" x="250" y="362" text-anchor="middle" '
+        f'font-family="Arial, sans-serif" font-size="13" fill="#00F0FF" opacity="0.65">{type_text}</text>',
+        updated_svg,
+    )
+
     updated_svg = re.sub(
         r'<g id="needle" transform="rotate\(.*? 250 250\)".*?>',
         f'<g id="needle" transform="rotate({angle:.2f} 250 250)" filter="url(#shadowEffect)">',
-        updated_svg
+        updated_svg,
     )
-    
-    # Add indicator for upload/download if needed
-    type_text = "Upload" if show_upload else "Download"
-    if "<text id=\"speedType\"" in updated_svg:
-        updated_svg = re.sub(
-            r'<text id="speedType".*?>.*?</text>',
-            f'<text id="speedType" x="250" y="370" text-anchor="middle" '
-            f'font-family="Arial, sans-serif" font-size="14" fill="#00F0FF" opacity="0.6">{type_text}</text>',
-            updated_svg
+
+    arc_d = _build_arc_path(-135.0, angle)
+    updated_svg = re.sub(
+        r'<path id="activeArc" d="[^"]*"',
+        f'<path id="activeArc" d="{arc_d}"',
+        updated_svg,
+    )
+
+    # Update dial scale labels linearly across -135..+135
+    marks = []
+    for idx in range(7):
+        deg = -135 + idx * 45
+        val = (display_max * idx) / 6.0
+        major = idx % 2 == 0
+        y2 = 60 if major else 65
+        sw = 3 if major else 2
+        fs = 15 if major else 13
+        op = "" if major else ' opacity="0.75"'
+        marks.append(
+            f'    <g transform="rotate({deg} 250 250)">\n'
+            f'      <line x1="250" y1="80" x2="250" y2="{y2}" stroke="#00F0FF" stroke-width="{sw}"/>\n'
+            f'      <text x="250" y="50" text-anchor="middle" font-size="{fs}" fill="#00F0FF"{op}>{_format_scale_label(val)}</text>\n'
+            f'    </g>'
         )
-    
+    dial_block = '<g id="dialMarks" font-family="Arial, sans-serif" font-weight="bold">\n' + "\n".join(marks) + '\n  </g>'
+    updated_svg = re.sub(
+        r'<g id="dialMarks"[^>]*>.*?</g>\s*</g>',
+        dial_block,
+        updated_svg,
+        flags=re.DOTALL,
+    )
+
     return updated_svg
 
-def update_svg_connection_status(svg_template, status, connection_type="Unknown"):
-    """Update connection status and network type in SVG template"""
-    color = "#00F0FF" if status == "Connected" else "#FF5050"
+
+def update_svg_connection_status(svg_template, status, connection_type="Unknown", meta_text=""):
+    """Update connection status, real interface type/detail, and metadata in SVG template."""
+    color = "#00F0FF" if status == "Connected" else ("#FFAA00" if status == "Checking..." else "#FF5050")
+    safe_status = escape(str(status or "Unknown"))
+    safe_type = escape(str(connection_type or "Unknown"))
+    safe_meta = escape(str(meta_text or ""))
+
     updated_svg = re.sub(
         r'<text id="connectionStatus".*?>.*?</text>',
-        f'<text id="connectionStatus" x="460" y="70" text-anchor="end" '
-        f'font-family="Arial, sans-serif" font-size="16" fill="{color}" opacity="0.8">{status}</text>',
-        svg_template
+        f'<text id="connectionStatus" x="76" y="58" text-anchor="start" '
+        f'font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="{color}" opacity="0.9">{safe_status}</text>',
+        svg_template,
     )
-    if "<text id=\"networkType\"" in updated_svg:
-        updated_svg = re.sub(
-            r'<text id="networkType".*?>.*?</text>',
-            f'<text id="networkType" x="460" y="90" text-anchor="end" '
-            f'font-family="Arial, sans-serif" font-size="14" fill="#00F0FF" opacity="0.6">{connection_type}</text>',
-            updated_svg
-        )
+    updated_svg = re.sub(
+        r'<text id="networkType".*?>.*?</text>',
+        f'<text id="networkType" x="76" y="76" text-anchor="start" '
+        f'font-family="Arial, sans-serif" font-size="12" fill="#00F0FF" opacity="0.75">{safe_type}</text>',
+        updated_svg,
+    )
+    updated_svg = re.sub(
+        r'<text id="networkMeta".*?>.*?</text>',
+        f'<text id="networkMeta" x="250" y="384" text-anchor="middle" '
+        f'font-family="Arial, sans-serif" font-size="11" fill="#88D8E6" opacity="0.75">{safe_meta}</text>',
+        updated_svg,
+    )
     return updated_svg
 
+
 def update_test_network_svg(svg_template, status, download, upload):
-    """Update the test network SVG with status, download, and upload values."""
-    import re
-    # Replace status
+    """Update the test network SVG with real status, download/upload values, and progress bars."""
+    dl = max(0.0, float(download or 0.0))
+    ul = max(0.0, float(upload or 0.0))
+    safe_status = escape(str(status or "Ready"))
+
+    title = "Network Speed Test"
+    if "Complete" in safe_status:
+        title = "Test Complete!"
+    elif "Failed" in safe_status:
+        title = "Test Failed"
+    elif "Running" in safe_status or "Testing" in safe_status:
+        title = "Testing Network Speed..."
+
+    # Scale progress bars up to 160px (assuming 100 Mbps reference, capped at 160px)
+    dl_width = min(160.0, (dl / 100.0) * 160.0) if dl > 0 else 0.0
+    ul_width = min(160.0, (ul / 100.0) * 160.0) if ul > 0 else 0.0
+
+    updated_svg = re.sub(
+        r'<text id="testTitle".*?>.*?</text>',
+        f'<text id="testTitle" x="150" y="75" font-family="Arial" font-size="17" font-weight="bold" fill="#FFFFFF" text-anchor="middle">{title}</text>',
+        svg_template,
+    )
     updated_svg = re.sub(
         r'<text id="testStatus".*?>.*?</text>',
-        f'<text id="testStatus" x="150" y="60" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#00F0FF">{status}</text>',
-        svg_template
+        f'<text id="testStatus" x="150" y="182" font-family="Arial" font-size="13" fill="#AAAAAA" text-anchor="middle">{safe_status}</text>',
+        updated_svg,
     )
-    # Replace download
     updated_svg = re.sub(
         r'<text id="downloadSpeed".*?>.*?</text>',
-        f'<text id="downloadSpeed" x="150" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#00F0FF">{download:.2f} Mbps</text>',
-        updated_svg
+        f'<text id="downloadSpeed" x="230" y="220" font-family="Arial" font-size="14" fill="#00F0FF" filter="url(#glowEffect)" text-anchor="end">{dl:.2f} Mbps</text>',
+        updated_svg,
     )
-    # Replace upload
     updated_svg = re.sub(
         r'<text id="uploadSpeed".*?>.*?</text>',
-        f'<text id="uploadSpeed" x="150" y="200" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#00F0FF">{upload:.2f} Mbps</text>',
-        updated_svg
+        f'<text id="uploadSpeed" x="230" y="250" font-family="Arial" font-size="14" fill="#00F0FF" filter="url(#glowEffect)" text-anchor="end">{ul:.2f} Mbps</text>',
+        updated_svg,
+    )
+    updated_svg = re.sub(
+        r'<rect id="downloadBar" x="70" y="226" width="[^"]*"',
+        f'<rect id="downloadBar" x="70" y="226" width="{dl_width:.1f}"',
+        updated_svg,
+    )
+    updated_svg = re.sub(
+        r'<rect id="uploadBar" x="70" y="256" width="[^"]*"',
+        f'<rect id="uploadBar" x="70" y="256" width="{ul_width:.1f}"',
+        updated_svg,
     )
     return updated_svg
+
 
 def update_svg_signal_strength(svg_content, strength):
     """
-    Update the signal strength bars in the SVG template.
-    strength: int (0-4)
+    Update signal strength bars in the main SVG template.
+    Accepts either 0-4 bar count or 0-100 percentage.
     """
-    # Clamp strength to [0, 4]
-    strength = max(0, min(4, int(strength)))
-    # Opacities for each bar (4 bars)
-    bar_opacities = [0.3, 0.5, 0.7, 0.9]
-    # Set bars with index < strength to full opacity, others to original
+    raw = float(strength or 0)
+    if raw > 4:
+        if raw >= 75:
+            bars = 4
+        elif raw >= 50:
+            bars = 3
+        elif raw >= 25:
+            bars = 2
+        elif raw > 0:
+            bars = 1
+        else:
+            bars = 0
+    else:
+        bars = max(0, min(4, int(raw)))
+
     new_svg = svg_content
-    for i, base_opacity in enumerate(bar_opacities):
-        # If bar is active, set to 1.0, else base_opacity
-        bar_opacity = "1.0" if i < strength else str(base_opacity)
-        # Replace the opacity for each bar (rect)
-        # x values are 0, 8, 16, 24 for the 4 bars
-        def _replace_opacity(match):
-            return f'{match.group(1)}{bar_opacity}{match.group(3)}'
+    for i in range(4):
+        bar_opacity = "1.0" if i < bars else "0.25"
         new_svg = re.sub(
             rf'(<rect x="{i*8}" [^>]*?opacity=")([0-9.]+)(")',
-            _replace_opacity,
-            new_svg
+            rf'\g<1>{bar_opacity}\g<3>',
+            new_svg,
         )
     return new_svg
 
-def update_floating_svg(svg_template, speed, signal_strength, connection_type, band):
-    """Update the floating window SVG with current values"""
-    # Format the speed value
+
+def update_floating_svg(svg_template, speed, signal_strength, connection_type, band, speed_unit="Mbps"):
+    """Update the floating window SVG with real values."""
+    display_speed = convert_speed(speed, speed_unit)
+    speed_str = f"{display_speed:.0f}" if speed_unit == "Kbps" and display_speed >= 100 else f"{display_speed:.1f}"
+
     updated_svg = re.sub(
         r'<text id="speedValue".*?>.*?</text>',
         f'<text id="speedValue" x="60" y="45" font-family="Arial, sans-serif" '
-        f'font-size="24" font-weight="bold" fill="url(#speedTextGradient)" text-anchor="middle" filter="url(#glow)">{speed:.1f}</text>',
-        svg_template
+        f'font-size="24" font-weight="bold" fill="url(#speedTextGradient)" text-anchor="middle" filter="url(#glow)">{speed_str}</text>',
+        svg_template,
     )
-    
-    # Update connection type and band
-    connection_info = f"{connection_type}"
+
     updated_svg = re.sub(
-        r'<text x="200" y="35".*?>.*?</text>',
-        f'<text x="200" y="35" font-family="Arial, sans-serif" font-size="14" fill="#00FF8F" text-anchor="middle">{connection_info}</text>',
-        updated_svg
+        r'<text id="speedUnit".*?>.*?</text>',
+        f'<text id="speedUnit" x="60" y="65" font-family="Arial, sans-serif" font-size="14" fill="#00FF8F" text-anchor="middle" opacity="0.8">{escape(speed_unit)}</text>',
+        updated_svg,
     )
-    
-    band_info = f"{band}"
+
+    safe_type = escape(str(connection_type or "--"))
+    safe_band = escape(str(band or ""))
+    if len(safe_band) > 22:
+        safe_band = safe_band[:21] + "…"
+
     updated_svg = re.sub(
-        r'<text x="200" y="55".*?>.*?</text>',
-        f'<text x="200" y="55" font-family="Arial, sans-serif" font-size="12" fill="#00FF8F" text-anchor="middle" opacity="0.7">{band_info}</text>',
-        updated_svg
+        r'<text id="connectionType".*?>.*?</text>',
+        f'<text id="connectionType" x="195" y="36" font-family="Arial, sans-serif" font-size="13" fill="#00FF8F" text-anchor="middle">{safe_type}</text>',
+        updated_svg,
     )
-    
-    # Update signal strength bars
-    filled_bars = 0
-    if signal_strength > 0:
-        filled_bars = 1
-    if signal_strength >= 25:
-        filled_bars = 2
-    if signal_strength >= 50:
-        filled_bars = 3
-    if signal_strength >= 75:
+
+    updated_svg = re.sub(
+        r'<text id="connectionBand".*?>.*?</text>',
+        f'<text id="connectionBand" x="195" y="54" font-family="Arial, sans-serif" font-size="10" fill="#00FF8F" text-anchor="middle" opacity="0.75">{safe_band}</text>',
+        updated_svg,
+    )
+
+    raw_sig = float(signal_strength or 0)
+    if raw_sig <= 4 and raw_sig > 0:
+        filled_bars = int(raw_sig)
+    elif raw_sig >= 75:
         filled_bars = 4
-    
-    # Create signal bars with animations
-    opacities = ["0.4", "0.6", "0.8", "0.3"]
-    fills = ["#00FF8F", "#00FF8F", "#00FF8F", "#00FF8F"]
-    
-    # Adjust opacities based on signal strength
-    for i in range(4):
-        if i >= filled_bars:
-            fills[i] = "#222222"  # Darker color for inactive bars
-    
-    signal_replacement = f"""<g transform="translate(130, 30)">
-      <rect x="0" y="10" width="5" height="10" rx="2" fill="{fills[0]}" opacity="{opacities[0]}">
-        <animate attributeName="opacity" values="{opacities[0]};1;{opacities[0]}" dur="2s" begin="0s" repeatCount="indefinite" />
-      </rect>
-      <rect x="10" y="5" width="5" height="15" rx="2" fill="{fills[1]}" opacity="{opacities[1]}">
-        <animate attributeName="opacity" values="{opacities[1]};1;{opacities[1]}" dur="2s" begin="0.5s" repeatCount="indefinite" />
-      </rect>
-      <rect x="20" y="0" width="5" height="20" rx="2" fill="{fills[2]}" opacity="{opacities[2]}">
-        <animate attributeName="opacity" values="{opacities[2]};1;{opacities[2]}" dur="2s" begin="1s" repeatCount="indefinite" />
-      </rect>
-      <rect x="30" y="-5" width="5" height="25" rx="2" fill="{fills[3]}" opacity="{opacities[3]}" />
-    </g>"""
-    
-    updated_svg = re.sub(r'<g transform="translate\(130, 30\)".*?</g>', signal_replacement, updated_svg)
-    
+    elif raw_sig >= 50:
+        filled_bars = 3
+    elif raw_sig >= 25:
+        filled_bars = 2
+    elif raw_sig > 0:
+        filled_bars = 1
+    else:
+        filled_bars = 0
+
+    fills = ["#00FF8F" if i < filled_bars else "#222222" for i in range(4)]
+    opacities = ["0.9" if i < filled_bars else "0.35" for i in range(4)]
+
+    signal_replacement = (
+        '<g transform="translate(130, 30)">\n'
+        f'      <rect x="0" y="10" width="5" height="10" rx="2" fill="{fills[0]}" opacity="{opacities[0]}"/>\n'
+        f'      <rect x="10" y="5" width="5" height="15" rx="2" fill="{fills[1]}" opacity="{opacities[1]}"/>\n'
+        f'      <rect x="20" y="0" width="5" height="20" rx="2" fill="{fills[2]}" opacity="{opacities[2]}"/>\n'
+        f'      <rect x="30" y="-5" width="5" height="25" rx="2" fill="{fills[3]}" opacity="{opacities[3]}"/>\n'
+        '    </g>'
+    )
+
+    updated_svg = re.sub(
+        r'<g transform="translate\(130, 30\)">.*?</g>',
+        signal_replacement,
+        updated_svg,
+        flags=re.DOTALL,
+    )
+
     return updated_svg
 
+
 def save_svg_to_file(svg_content):
-    """Save SVG content to temporary file and return the path"""
+    """Save SVG content to temporary file and return the path (legacy helper)."""
     try:
-        # Create temporary file in a secure way
         with tempfile.NamedTemporaryFile(delete=False, suffix='.svg', mode='w') as temp_file:
             temp_file.write(svg_content)
             return temp_file.name
     except Exception as e:
         logging.error(f"Error saving SVG to file: {e}")
-        # Fallback to fixed filename if tempfile fails
         with open(TEMP_SVG_FILE, 'w') as f:
             f.write(svg_content)
         return TEMP_SVG_FILE
+
 
 def cleanup_temp_files():
     """Clean up any temporary SVG files"""
