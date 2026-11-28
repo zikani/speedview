@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from PyQt5.QtWidgets import QApplication
 from speedview.models.settings import Settings
 from speedview.models.data_usage import DataUsageTracker, format_bytes
@@ -266,11 +267,13 @@ class TestSettingsAndDetection(unittest.TestCase):
             old_xdg = os.environ.get("XDG_CONFIG_HOME")
             os.environ["XDG_CONFIG_HOME"] = tmpdir
             try:
-                self.assertTrue(apply_startup_setting(True))
-                desktop_path = os.path.join(tmpdir, "autostart", "speedview.desktop")
-                self.assertTrue(os.path.exists(desktop_path))
-                self.assertTrue(apply_startup_setting(False))
-                self.assertFalse(os.path.exists(desktop_path))
+                # This test verifies Linux/XDG behavior regardless of the CI runner OS.
+                with patch("speedview.config.windows.platform.system", return_value="Linux"):
+                    self.assertTrue(apply_startup_setting(True))
+                    desktop_path = os.path.join(tmpdir, "autostart", "speedview.desktop")
+                    self.assertTrue(os.path.exists(desktop_path))
+                    self.assertTrue(apply_startup_setting(False))
+                    self.assertFalse(os.path.exists(desktop_path))
             finally:
                 if old_xdg is None:
                     os.environ.pop("XDG_CONFIG_HOME", None)
