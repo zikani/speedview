@@ -19,6 +19,7 @@ if sys.platform == "win32":
 datas = [
     ("speedview/ui/resources/speedview.png", "speedview/ui/resources"),
     ("speedview/ui/resources/speedview.ico", "speedview/ui/resources"),
+    ("speedview/ui/resources/speedview.icns", "speedview/ui/resources"),
     ("speedview/ui/resources/speedview_icon.svg", "speedview/ui/resources"),
     ("CHANGELOG.md", "."),
 ]
@@ -34,7 +35,9 @@ if os.path.isdir(payload_root):
 
 if sys.platform == "win32" and os.path.exists("speedview/ui/resources/speedview.ico"):
     setup_icon = "speedview/ui/resources/speedview.ico"
-elif os.path.exists("speedview/ui/resources/speedview.png"):
+elif sys.platform == "darwin" and os.path.exists("speedview/ui/resources/speedview.icns"):
+    setup_icon = "speedview/ui/resources/speedview.icns"
+elif sys.platform.startswith("linux") and os.path.exists("speedview/ui/resources/speedview.png"):
     setup_icon = "speedview/ui/resources/speedview.png"
 else:
     setup_icon = None

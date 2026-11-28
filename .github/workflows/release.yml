@@ -112,7 +112,8 @@ jobs:
           pyinstaller --noconfirm --clean speedview.spec
           pyinstaller --noconfirm --clean speedview_installer.spec
           $AppVersion = (python -c "from speedview.config.config import APP_VERSION; print(APP_VERSION)").Trim()
-          wix build installer\windows\SpeedView.wxs -ext WixToolset.UI.wixext -d "AppVersion=$AppVersion" -arch x64 -o dist\SpeedView-windows-x64.msi
+          python installer\windows\generate_files_wxs.py --dist-dir dist\SpeedView --output installer\windows\AppFiles.wxs
+          wix build installer\windows\SpeedView.wxs installer\windows\AppFiles.wxs -ext WixToolset.UI.wixext -d "AppVersion=$AppVersion" -arch x64 -o dist\SpeedView-windows-x64.msi
           Compress-Archive -Path dist\SpeedView\* -DestinationPath dist\SpeedView-windows-x64.zip -Force
           $zipHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-windows-x64.zip).Hash.ToLower()
           $setupHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-Setup.exe).Hash.ToLower()

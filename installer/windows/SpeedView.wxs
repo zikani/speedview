@@ -33,10 +33,6 @@
       <ComponentRef Id="ShortcutComponents" />
     </Feature>
 
-    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
-      <Files Include="..\..\dist\SpeedView\**" />
-    </ComponentGroup>
-
     <Component Id="ShortcutComponents"
                Directory="INSTALLFOLDER"
                Guid="C8A3F210-39D4-47B5-9C6E-2214E8A01105">

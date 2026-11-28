@@ -772,6 +772,55 @@ class TestSettingsAndDetection(unittest.TestCase):
             wiz.deleteLater()
             self._app.processEvents()
 
+    def test_packaging_icns_and_wix_v4_manifest(self):
+        import importlib.util
+        import xml.etree.ElementTree as ET
+
+        gen_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "installer", "windows", "generate_files_wxs.py")
+        )
+        spec = importlib.util.spec_from_file_location("generate_files_wxs", gen_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        generate_app_files_wxs = mod.generate_app_files_wxs
+
+        icns_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "speedview", "ui", "resources", "speedview.icns")
+        )
+        self.assertTrue(os.path.isfile(icns_path))
+        with open(icns_path, "rb") as f:
+            self.assertEqual(f.read(4), b"icns")
+
+        # Validate SpeedView.wxs has no WiX v5-only <Files> element
+        speedview_wxs = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "installer", "windows", "SpeedView.wxs")
+        )
+        main_tree = ET.parse(speedview_wxs)
+        self.assertIsNone(main_tree.getroot().find(".//{http://wixtoolset.org/schemas/v4/wxs}Files"))
+
+        # Validate generated AppFiles.wxs contains nested dirs and SpeedView.exe component
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dist_dir = os.path.join(tmpdir, "dist", "SpeedView")
+            os.makedirs(os.path.join(dist_dir, "_internal", "sub"), exist_ok=True)
+            with open(os.path.join(dist_dir, "SpeedView.exe"), "wb") as f:
+                f.write(b"EXE")
+            with open(os.path.join(dist_dir, "_internal", "sub", "qt.dll"), "wb") as f:
+                f.write(b"DLL")
+
+            out_wxs = os.path.join(tmpdir, "AppFiles.wxs")
+            generate_app_files_wxs(dist_dir, out_wxs)
+            tree = ET.parse(out_wxs)
+            root = tree.getroot()
+            ns = {"w": "http://wixtoolset.org/schemas/v4/wxs"}
+            comps = root.findall(".//w:Component", ns)
+            files = root.findall(".//w:File", ns)
+            dirs = root.findall(".//w:Directory", ns)
+            self.assertEqual(len(comps), 2)
+            self.assertEqual(len(files), 2)
+            self.assertTrue(any(f.attrib.get("Id") == "SpeedViewExeFile" for f in files))
+            self.assertTrue(any(d.attrib.get("Name") == "_internal" for d in dirs))
+            self.assertTrue(any(d.attrib.get("Name") == "sub" for d in dirs))
+
 
 if __name__ == '__main__':
     unittest.main()

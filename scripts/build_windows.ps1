@@ -38,8 +38,10 @@ try {
     if (Get-Command wix -ErrorAction SilentlyContinue) {
         Write-Host "==> Building WiX GUI MSI dist\SpeedView-windows-x64.msi..." -ForegroundColor Cyan
         $AppVersion = (& $PythonExe -c "from speedview.config.config import APP_VERSION; print(APP_VERSION)").Trim()
+        $AppFilesWxs = Join-Path $RootDir "installer\windows\AppFiles.wxs"
+        & $PythonExe installer\windows\generate_files_wxs.py --dist-dir $OnedirPath --output $AppFilesWxs
         wix extension add -g WixToolset.UI.wixext 2>$null | Out-Null
-        wix build installer\windows\SpeedView.wxs -ext WixToolset.UI.wixext -d "AppVersion=$AppVersion" -arch x64 -o $MsiPath
+        wix build installer\windows\SpeedView.wxs $AppFilesWxs -ext WixToolset.UI.wixext -d "AppVersion=$AppVersion" -arch x64 -o $MsiPath
     } else {
         Write-Host "NOTE: WiX Toolset ('wix') not found on PATH; skipping .msi build (GUI .exe Setup + .zip still built)." -ForegroundColor Yellow
     }
