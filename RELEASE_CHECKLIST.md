@@ -2,7 +2,7 @@
 
 ## 1. Pre-Release
 - [x] Update version number in `speedview/config/config.py` (`APP_VERSION`) and About dialog
-- [x] Ensure `README.md` is up to date (banner/UI showcase SVGs, ping badge, corner float pill, close-to-float lifecycle, `start_on_startup`, PyInstaller release guide)
+- [x] Ensure `README.md` and `RELEASE.md` (auto-updater architecture & release process) are up to date
 - [x] Ensure `LICENSE` file is present and correct
 - [x] Check `requirements.txt` includes cross-platform environment markers (`pywin32`, `winshell` gated to `win32`) and `pyinstaller`
 

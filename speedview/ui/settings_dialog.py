@@ -21,8 +21,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 import psutil
 
-from speedview.config.config import APP_VERSION, DEFAULT_RELEASES_PAGE_URL
+from speedview.config.config import APP_VERSION
 from speedview.config.windows import apply_startup_setting
+from speedview.ui.about_dialog import AboutDialog
+from speedview.ui.update_dialog import UpdateDialog
 from speedview.update.updater import UpdateChecker
 
 
@@ -286,35 +288,14 @@ class SettingsDialog(QDialog):
         )
 
     def show_about(self):
-        """Show about dialog."""
-        QMessageBox.about(
-            self,
-            "About SpeedView",
-            f"SpeedView - Network Speed Meter v{APP_VERSION}\n\n"
-            "A cross-platform real-time network speed monitor built with PyQt5 and SVG.\n\n"
-            f"Releases: {DEFAULT_RELEASES_PAGE_URL}\n"
-            "Licensed under MIT",
-        )
+        """Show About dialog with current features and changelog for the active version."""
+        dialog = AboutDialog(parent=self, settings=self.settings)
+        dialog.exec_()
 
     def check_updates(self):
-        """Check for software updates immediately (bypassing the 3-day cooldown)."""
-        try:
-            self.updater = UpdateChecker(settings=self.settings)
-            has_update = self.updater.check_for_updates(force=True)
-
-            if has_update:
-                reply = QMessageBox.question(
-                    self,
-                    "Update Available",
-                    f"Version {self.updater.latest_version} is available. Download and install update now?",
-                    QMessageBox.Yes | QMessageBox.No,
-                )
-                if reply == QMessageBox.Yes:
-                    self.start_update()
-            else:
-                QMessageBox.information(self, "Up to Date", "You are running the latest version.")
-        except Exception as e:
-            QMessageBox.warning(self, "Update Check Failed", f"Could not check for updates:\n{str(e)}")
+        """Open UpdateDialog to check for updates and show new version changelog."""
+        dialog = UpdateDialog(parent=self, settings=self.settings, force_check=True)
+        dialog.exec_()
 
     def create_monitoring_group(self):
         """Create monitoring settings card."""

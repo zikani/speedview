@@ -440,6 +440,37 @@ class TestSettingsAndDetection(unittest.TestCase):
                     server.shutdown()
                     server.server_close()
 
+    def test_about_and_update_dialogs_show_features_and_changelogs(self):
+        from speedview.config.config import APP_FEATURES, APP_VERSION, CURRENT_CHANGELOG
+        from speedview.ui.about_dialog import AboutDialog
+        from speedview.ui.update_dialog import UpdateDialog
+
+        settings = Settings()
+        about = AboutDialog(settings=settings)
+        self.assertIn(APP_VERSION, about.version_label.text())
+        features_txt = about.features_view.toPlainText()
+        changelog_txt = about.changelog_view.toPlainText()
+        for feat in APP_FEATURES:
+            self.assertIn(feat, features_txt)
+        for entry in CURRENT_CHANGELOG:
+            self.assertIn(entry, changelog_txt)
+        about.close()
+
+        upd = UpdateDialog(settings=settings, force_check=True, auto_check=False)
+        upd.updater.latest_version = "2.5.0"
+        upd.updater.release_notes = "## Release 2.5.0\n- Faster telemetry\n- Polished Float widget"
+        upd.updater.download_url = "https://example.com/SpeedView-windows-x64.zip"
+        upd.updater.release_page_url = "https://example.com/releases/v2.5.0"
+        with patch.object(upd.updater, "check_for_updates", return_value=True):
+            upd.check_for_updates()
+        upd.show()
+        self.assertIn("2.5.0", upd.header_title.text())
+        self.assertIn("2.5.0", upd.changelog_heading.text())
+        self.assertIn("Faster telemetry", upd.changelog_view.toPlainText())
+        self.assertIn("Polished Float widget", upd.changelog_view.toPlainText())
+        self.assertTrue(upd.update_button.isVisible())
+        upd.close()
+
 
 if __name__ == '__main__':
     unittest.main()

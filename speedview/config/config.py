@@ -5,6 +5,25 @@ import os
 APP_NAME = "Network Speed Meter"
 APP_VERSION = "1.0.0"
 
+APP_FEATURES = [
+    "Frameless translucent SVG speedometer with Download/Upload scale and gear Settings button",
+    "Real-time Ping / Latency badge (ms) displayed alongside the main gauge",
+    "Transparent corner Float pill (136x40) displaying live signal strength and speed",
+    "Automatic interface detection (Ethernet, Wi-Fi SSID/band, Virtual, Loopback, link speed, IPv4/IPv6)",
+    "Live HTTP file streaming speed test with speedtest-cli and fast-cli fallbacks",
+    "Per-app SQLite Data Usage tracker (App | Data | Date) with Daily & Monthly reports",
+    "Background system tray daemon, OS autostart (Windows/Linux/macOS), and close-to-Float workflow",
+    "3-day rate-limited GitHub Releases background auto-updater with temp .zip staging & helper restart",
+]
+
+CURRENT_CHANGELOG = [
+    "Added 3-day GitHub Releases background auto-updater with temp .zip staging and detached swap-and-restart helper scripts (Windows/macOS/Linux)",
+    "Added automated PyInstaller release packaging (speedview.spec, scripts/build_windows.bat/.ps1, and GitHub Actions)",
+    "Added real-time TCP Ping / Latency indicator (#pingBadge) next to the speed gauge",
+    "Rescaled compact transparent corner Float widget (signal + speed only), added gear icon Settings trigger, and redesigned Settings dark theme",
+    "Unified close-to-Float and minimize-to-tray background lifecycle plus OS Start on Startup registration",
+]
+
 # Default settings
 DEFAULT_MAX_SPEED = 100
 DEFAULT_MAX_UPLOAD = 50  # Added default max upload speed
