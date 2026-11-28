@@ -210,12 +210,10 @@ class TestSettingsAndDetection(unittest.TestCase):
         mw.tray = DummyTray()
         mw.show()
 
-        # 1. Minimize -> hides main window to tray
         mw.minimize_to_tray()
         self.assertFalse(mw.isVisible())
         self.assertTrue(mw.tray.shown)
 
-        # 2. Close MainWindow -> opens compact transparent Float widget (136x40) in corner and hides MainWindow
         mw.show()
         mw.close()
         self.assertIsNotNone(mw.floating_window)
@@ -227,12 +225,10 @@ class TestSettingsAndDetection(unittest.TestCase):
         self.assertGreaterEqual(mw.floating_window.y(), avail.bottom() - 40 - 40)
         self.assertFalse(mw.isVisible())
 
-        # 3. Close Float widget -> stays minimized in tray (background)
         mw.floating_window.close()
         self.assertIsNone(mw.floating_window)
         self.assertFalse(mw.isVisible())
 
-        # 4. Usage button -> opens DataUsageDialog and hides MainWindow; closing DataUsageDialog opens Float!
         mw.show()
         mw.open_data_usage(close_main=True)
         self.assertFalse(mw.isVisible())
@@ -242,7 +238,6 @@ class TestSettingsAndDetection(unittest.TestCase):
         self.assertIsNotNone(mw.floating_window)
         mw.floating_window.close()
 
-        # 5. Closing TestNetworkDialog also opens Float widget
         mw.show()
         mw.test_network()
         self.assertIsNotNone(mw._test_dialog)
@@ -251,7 +246,6 @@ class TestSettingsAndDetection(unittest.TestCase):
         self.assertFalse(mw.isVisible())
         mw.floating_window.close()
 
-        # 6. SettingsDialog does NOT inherit MainWindow transparent background & has start_on_startup checkbox
         dlg = SettingsDialog(parent=mw, settings=settings)
         self.assertFalse(dlg.testAttribute(Qt.WA_TranslucentBackground))
         self.assertIn("#0B1220", dlg.styleSheet())
@@ -267,7 +261,7 @@ class TestSettingsAndDetection(unittest.TestCase):
             old_xdg = os.environ.get("XDG_CONFIG_HOME")
             os.environ["XDG_CONFIG_HOME"] = tmpdir
             try:
-                # This test verifies Linux/XDG behavior regardless of the CI runner OS.
+                # Verify Linux/XDG behavior regardless of the CI runner OS.
                 with patch("speedview.config.windows.platform.system", return_value="Linux"):
                     self.assertTrue(apply_startup_setting(True))
                     desktop_path = os.path.join(tmpdir, "autostart", "speedview.desktop")
