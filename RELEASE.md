@@ -1,12 +1,16 @@
 # SpeedView Release & Auto-Updater Guide
 
-This document explains how SpeedView packages cross-platform GitHub Releases and how the built-in background auto-updater downloads, stages, swaps, and restarts updates across Windows, macOS, and Linux.
+This document explains how SpeedView packages cross-platform installers (`Program Files\SpeedView` `onedir` layout + GUI `.msi` / `SpeedView-Setup.exe`) and how the built-in background auto-updater downloads, stages, swaps, and restarts updates across Windows, macOS, and Linux.
 
 ---
 
 ## How the Auto-Updater Works
 
-Because an active desktop application cannot reliably overwrite its own open binary (`SpeedView.exe`, `SpeedView.app`, or `SpeedView-linux-x64`) while running, SpeedView uses a **3-day rate-limited background check + temp `.zip` staging + detached helper swap-and-restart** flow (`speedview/update/updater.py`).
+Because an active desktop application cannot reliably overwrite its own open binary or shared `_internal/` libraries while running, SpeedView uses an **`onedir` `Program Files\SpeedView` layout + 3-day rate-limited GitHub Releases check + temp `.zip` staging + detached Python subprocess swap-and-restart** flow (`speedview/update/updater.py`).
+
+### Why Extracted `Program Files\SpeedView` (`onedir`) Replaces Standalone `.exe`
+- **No manual download-and-delete step**: Replacing `C:\Program Files\SpeedView\` (both `SpeedView.exe` and `_internal\`) updates the existing installation cleanly in place.
+- **MSI + GUI Installer/Uninstaller**: Users install once with `SpeedView-windows-x64.msi` or `SpeedView-Setup.exe`, get Desktop and Start Menu shortcuts plus `SpeedView.ico` file/taskbar icons, and uninstall cleanly from Windows **Apps & Features**.
 
 ### End-to-End Update Flow
 
@@ -14,77 +18,62 @@ Because an active desktop application cannot reliably overwrite its own open bin
 App Startup / 6h Timer
    │
    ▼  (Is auto_update=true AND >= 3 days since last_update_check?)
-GitHub Releases API (/releases/latest)
+GitHub Releases API (/releases/latest + /releases?per_page=30)
    │
-   ▼  (Newer semver tag found? Pick OS-matching .zip asset)
+   ├──► Caches release changelogs & features in releases_cache.json
+   │    (About & Update dialogs always list ALL released versions)
+   │
+   ▼  (Newer semver tag found? Pick OS-matching onedir .zip asset)
 Download .zip ──► Temp Staging Folder (speedview_update_*)
    │
    ▼  (Safe ZipSlip-checked extraction + POSIX chmod preservation)
-Launch Detached Helper Script (.bat on Windows / .sh on macOS & Linux)
+Launch Detached Python Updater Subprocess (UAC elevated if Program Files)
    │
    ▼
 Main App Exits (force_quit)
    │
    ├──► Helper waits for PID exit
-   ├──► Replaces old binary or .app bundle from temp folder
+   ├──► Copies extracted onedir folder (SpeedView.exe + _internal/) into Program Files\SpeedView
    ├──► Removes temporary staging directory
    ├──► Restarts updated SpeedView binary / .app
    └──► Helper script deletes itself
 ```
 
-### 1. Three-Day Check Cooldown (API Rate-Limit Protection)
+### 1. Three-Day Check Cooldown & Release History Cache
 - **Cooldown Constant**: `UPDATE_CHECK_INTERVAL_SECONDS = 259200` (3 days) in `speedview/config/config.py`.
-- **Persisted State**: `auto_update` (`true` by default) and `last_update_check` (Unix timestamp) are stored in `network_speed_meter.conf`.
-- **Non-Blocking Schedule**: `MainWindow` triggers an initial check **2.5 seconds after startup** via `QTimer.singleShot` and polls every **6 hours**, running network requests on a background daemon thread so the UI never freezes.
-- **Throttling Rule**: `UpdateChecker.should_check_for_updates(force=False)` skips calling the GitHub API unless at least 3 days have elapsed since `last_update_check`.
-- **Manual Override**: Clicking **Updates** in the Settings dialog (or triggering `check_for_updates()`) passes `force=True` to check immediately regardless of the 3-day cooldown.
+- **Persisted State**: `auto_update` (`true` by default) and `last_update_check` (Unix timestamp) live in `network_speed_meter.conf`.
+- **All-Version Changelogs**: Live `/releases` payloads are merged with built-in `RELEASE_HISTORY` (`CHANGELOG.md`) and cached in `releases_cache.json`, ensuring **About** and **Updater** dialogs always display features and changelogs across every released version even when offline or after updating.
+- **Manual Override**: Clicking **Updates** in Settings or About passes `force=True` to check immediately.
 
 ### 2. Platform-Matched Release Asset Selection
-`UpdateChecker.check_for_updates()` queries `DEFAULT_UPDATE_URL` (`https://api.github.com/repos/zikani/speedview/releases/latest`), strips any leading `v` from `tag_name`, and compares it against `APP_VERSION` using `packaging.version`.
-
-When a newer version exists, `_select_asset_for_platform()` prefers the matching `.zip` archive for the host OS (with binary/tarball fallbacks):
-
-| Operating System | Primary `.zip` Asset | Fallback Assets |
+| Operating System | Primary `.zip` Asset | Installer / Fallback Assets |
 | :--- | :--- | :--- |
-| **Windows** (`Windows`) | `*win*.zip` (`SpeedView-windows-x64.zip`) | Generic `.zip`, `.exe` |
+| **Windows** (`Windows`) | `*win*.zip` (`SpeedView-windows-x64.zip` `onedir`) | `SpeedView-windows-x64.msi`, `SpeedView-Setup.exe` |
 | **macOS** (`Darwin`) | `*mac*` / `*darwin*` / `*osx*.zip` (`SpeedView-macos.zip`) | `.tar.gz`, `.dmg` |
-| **Linux** (`Linux`) | `*linux*.zip` (`SpeedView-linux-x64.zip`) | `.tar.gz`, `.appimage`, `.deb` |
+| **Linux** (`Linux`) | `*linux*.zip` (`SpeedView-linux-x64.zip` `onedir`) | `.tar.gz`, `SpeedView-linux-x64-Setup` |
 
-### 3. Temporary Folder Download & Safe Extraction
-- `download_update()` streams the archive into a unique temporary staging folder created via `tempfile.mkdtemp(prefix="speedview_update_")`.
-- `.zip` archives are extracted into `<staged_dir>/extracted/` using `_safe_extract_zip()`, which validates resolved paths against the extraction root (preventing ZipSlip path traversal) and restores POSIX file permission bits (`chmod`).
-
-### 4. Detached Python Subprocess Self-Replacement
-Once an update archive finishes downloading and extracting in the temporary folder:
-- **Packaged & Source Support**: `can_self_replace()` returns `True` for packaged binaries (`SpeedView.exe`, `SpeedView.app`, `SpeedView-linux-x64`) using OS binary `.zip` assets as well as local source checkouts (`python main.py`) using GitHub's `zipball_url` source archive (or binary asset fallback).
-- **Python Subprocess Helper (`speedview_updater_*.py`)**: Spawns a detached Python subprocess (`subprocess.Popen([sys.executable, helper_script])`) that waits for the parent PID to exit (`os.kill` on macOS/Linux, Win32 `WaitForSingleObject` on Windows), copies/replaces the target binary, `.app` bundle, or source directory cleanly via `shutil`, deletes the temporary staging folder, relaunches the updated app, and removes itself. (If a standalone frozen build runs on a host with no system Python installed, `install_update()` automatically falls back to a detached `.bat` / `/bin/sh` helper.)
-
-### 5. Configuration Controls
-Users can configure update behavior in **Settings → Behavior & System Tray** or directly in `network_speed_meter.conf`:
-- `auto_update`: Enable or disable automatic 3-day background checks and auto-apply.
-- `update_url`: Override the GitHub Releases API endpoint for mirrors or testing.
-- `last_update_check`: Timestamp of the most recent check attempt.
+### 3. Detached Python Subprocess Self-Replacement
+- `install_update()` spawns `speedview_updater_*.py` using the active Python interpreter (with UAC `ShellExecuteW(..., "runas", ...)` on Windows when updating protected `C:\Program Files\SpeedView`, and native `.bat` / `/bin/sh` fallback on hosts without system Python).
+- For `onedir` archives containing both the executable and `_internal/`, `_pick_source_entry()` selects the extracted bundle directory so `shutil.copytree(..., dirs_exist_ok=True)` updates every file inside `Program Files\SpeedView\` cleanly.
 
 ---
 
 ## Publishing a New Release
 
-Releases are automated via PyInstaller (`.github/workflows/release.yml`) and `speedview.spec`:
-
-1. Bump `APP_VERSION` in `speedview/config/config.py`.
+1. Update `APP_VERSION` and prepend the new release entry to `RELEASE_HISTORY` in `speedview/config/config.py` (plus `CHANGELOG.md`).
 2. Verify everything passes locally:
    ```bash
-   python -m compileall -q main.py speedview tests
-   xvfb-run -a python -m unittest discover -s tests -v   # Linux headless
+   python -m compileall -q main.py installer.py speedview tests
+   xvfb-run -a python -m unittest discover -s tests -v
    ```
 3. Commit your changes, create a version tag, and push:
    ```bash
    git tag v1.0.1
    git push origin v1.0.1
    ```
-4. GitHub Actions builds and publishes:
-   - **Windows**: `SpeedView.exe`, `SpeedView-windows-x64.zip`, `SpeedView-windows-x64.sha256`
+4. GitHub Actions (`.github/workflows/release.yml`) builds and publishes:
+   - **Windows**: `SpeedView-windows-x64.msi` (WiX GUI MSI), `SpeedView-Setup.exe` (PyQt5 Setup Wizard), `SpeedView-windows-x64.zip` (`onedir`), `SpeedView-windows-x64.sha256`
    - **macOS**: `SpeedView-macos.zip`, `SpeedView-macos.zip.sha256`
-   - **Linux**: `SpeedView-linux-x64`, `SpeedView-linux-x64.tar.gz`, `SpeedView-linux-x64.zip`, `SpeedView-linux-x64.sha256`
+   - **Linux**: `SpeedView-linux-x64.zip`, `SpeedView-linux-x64.tar.gz`, `SpeedView-linux-x64-Setup`, `SpeedView-linux-x64.sha256`
 
-To build `dist\SpeedView.exe` locally on Windows without waiting for CI, run `scripts\build_windows.bat` or `.\scripts\build_windows.ps1`. See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for the pre-release verification checklist.
+To build locally on Windows, run `scripts\build_windows.bat` or `.\scripts\build_windows.ps1`. See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for the pre-release checklist.

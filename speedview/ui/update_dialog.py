@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from ..update.updater import UpdateChecker
+from ..utils.icon_utils import get_app_icon
 
 
 class UpdateWorker(QThread):
@@ -50,8 +51,9 @@ class UpdateDialog(QDialog):
 
     def init_ui(self):
         self.setWindowTitle("SpeedView Software Update")
-        self.setMinimumSize(480, 380)
-        self.resize(500, 420)
+        self.setWindowIcon(get_app_icon())
+        self.setMinimumSize(520, 440)
+        self.resize(560, 500)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
         self.setAutoFillBackground(True)
@@ -77,29 +79,41 @@ class UpdateDialog(QDialog):
 
         header = QFrame(self)
         header.setObjectName("updateHeader")
-        header_layout = QVBoxLayout(header)
+        header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(14, 12, 14, 12)
-        header_layout.setSpacing(4)
+        header_layout.setSpacing(12)
 
+        icon_label = QLabel(self)
+        icon = get_app_icon()
+        if not icon.isNull():
+            icon_label.setPixmap(icon.pixmap(36, 36))
+        icon_label.setFixedSize(36, 36)
+        header_layout.addWidget(icon_label)
+
+        title_col = QVBoxLayout()
+        title_col.setSpacing(3)
         self.header_title = QLabel("Software Update")
         self.header_title.setObjectName("headerTitle")
         self.version_label = QLabel(f"Installed version: v{self.updater.current_version}")
         self.version_label.setObjectName("versionMeta")
-        header_layout.addWidget(self.header_title)
-        header_layout.addWidget(self.version_label)
+        title_col.addWidget(self.header_title)
+        title_col.addWidget(self.version_label)
+        header_layout.addLayout(title_col, 1)
+
         layout.addWidget(header)
 
         self.status_label = QLabel("Checking GitHub Releases for updates...")
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
-        self.changelog_heading = QLabel("NEW VERSION CHANGELOG")
+        self.changelog_heading = QLabel("ALL VERSION CHANGELOGS & FEATURES")
         self.changelog_heading.setObjectName("changelogHeading")
         layout.addWidget(self.changelog_heading)
 
         self.changelog_view = QTextEdit(self)
         self.changelog_view.setReadOnly(True)
-        self.changelog_view.setPlaceholderText("Release notes for the latest version will appear here.")
+        self.changelog_view.setPlaceholderText("Release notes and version features will appear here.")
+        self._set_changelog_text(self.updater.get_all_changelogs_markdown(include_builtin=True))
         layout.addWidget(self.changelog_view, 1)
 
         self.progress_bar = QProgressBar()
@@ -123,7 +137,7 @@ class UpdateDialog(QDialog):
         layout.addLayout(btn_row)
 
     def _set_changelog_text(self, text):
-        notes = (text or "No release notes provided for this release.").strip()
+        notes = (text or self.updater.get_all_changelogs_markdown(include_builtin=True)).strip()
         if hasattr(self.changelog_view, "setMarkdown"):
             self.changelog_view.setMarkdown(notes)
         else:
@@ -151,14 +165,11 @@ class UpdateDialog(QDialog):
             self.header_title.setText("You Are Up to Date")
             self.version_label.setText(f"Installed version: v{self.updater.current_version}")
             self.status_label.setText("No newer release was found on GitHub Releases.")
-            if self.updater.release_notes:
-                self.changelog_heading.setText(
-                    f"LATEST RELEASE NOTES (v{self.updater.latest_version or self.updater.current_version})"
-                )
-                self._set_changelog_text(self.updater.release_notes)
-            else:
-                self.changelog_heading.hide()
-                self.changelog_view.hide()
+            self.changelog_heading.setText("ALL VERSION CHANGELOGS & FEATURES")
+            self.changelog_heading.show()
+            self.changelog_view.show()
+            combined = self.updater.release_notes or self.updater.get_all_changelogs_markdown(include_builtin=True)
+            self._set_changelog_text(combined)
             self.update_button.hide()
             if not self.force_check:
                 self.close()

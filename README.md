@@ -37,8 +37,9 @@
 | **Real Interface Detection** | Automatically detects active **Ethernet**, **Wi-Fi** (real SSID, `2.4GHz` / `5GHz` / `6GHz` band, signal percentage), **Virtual**, or **Loopback** adapters with link speed and IPv4/IPv6 addresses across Linux, Windows, and macOS. |
 | **Live File Speed Testing** | Real-time streaming download and chunked upload throughput test (`NetworkController.measure_file_speed`) against public CDN endpoints with `speedtest-cli` and `fast-cli` fallbacks. |
 | **SQLite Data Usage (`App \| Data \| Date`)** | Per-process socket traffic attribution persisted in `data_usage.db`, presented in a frameless SVG window with `DAILY` / `MONTHLY` breakdowns and `RESET`. |
-| **Modern Settings & Autostart** | High-contrast dark-navy Settings dialog with interface selector (`Auto-select` or manual), **Start SpeedView automatically on system startup** (Windows Registry / Linux XDG `.desktop` / macOS LaunchAgent), units (`Mbps`, `MB/s`, `Kbps`), alerts, and update controls. |
-| **Background GitHub Auto-Updater** | Checks GitHub Releases **once every 3 days** (avoiding API rate limits), downloads OS-matching `.zip` updates into a temp folder in the background, and launches a detached helper script that waits for exit, swaps files cleanly, and restarts. |
+| **Modern Settings & Shortcuts** | High-contrast dark-navy Settings dialog with interface selector (`Auto-select` or manual), **Start SpeedView automatically on system startup**, one-click **Create Desktop Shortcut**, units (`Mbps`, `MB/s`, `Kbps`), alerts, and update controls. |
+| **Background GitHub Auto-Updater** | Checks GitHub Releases **once every 3 days**, aggregates **all released version changelogs & features**, downloads OS-matching `onedir` `.zip` updates into a temp folder, and launches a detached Python helper (with UAC elevation on protected `Program Files` paths) to replace files cleanly and restart. |
+| **GUI Installer / Uninstaller & MSI** | Installs SpeedView cleanly to `C:\Program Files\SpeedView` (`onedir` layout) via WiX `.msi` (`SpeedView-windows-x64.msi`) or the PyQt5 `SpeedView-Setup` wizard with bundled app icons (`speedview.ico`/`speedview.png`), Start Menu, Desktop shortcut, and Apps & Features uninstaller. |
 | **System Tray Background Daemon** | Keeps tracking speed and app data usage continuously in the background with a dynamic speed badge icon, synced tooltip, quick menu actions, and threshold alerts. |
 
 ---
@@ -84,11 +85,13 @@ sudo apt-get update && sudo apt-get install -y --no-install-recommends \
 
 ## Installation
 
-### 1. Run Prebuilt Release Binaries (Recommended for End Users)
-Download the latest standalone binary or archive from the [**GitHub Releases**](https://github.com/zikani/speedview/releases) page:
-- **Windows**: `SpeedView.exe` or `SpeedView-windows-x64.zip`
+### 1. Run Installer or Prebuilt Release Packages (Recommended for End Users)
+Download the latest installer or extracted bundle from the [**GitHub Releases**](https://github.com/zikani/speedview/releases) page:
+- **Windows (MSI Installer)**: `SpeedView-windows-x64.msi` — installs to `C:\Program Files\SpeedView` with Desktop & Start Menu shortcuts and clean Windows Apps & Features uninstallation
+- **Windows (GUI Setup / Uninstaller)**: `SpeedView-Setup.exe` — PyQt5 Install / Upgrade / Uninstall wizard (`--uninstall` supported)
+- **Windows (Portable `onedir` ZIP)**: `SpeedView-windows-x64.zip` (`SpeedView.exe` + `_internal/`)
 - **macOS**: `SpeedView-macos.zip` (`SpeedView.app`)
-- **Linux**: `SpeedView-linux-x64.zip` (or `SpeedView-linux-x64` / `.tar.gz`)
+- **Linux**: `SpeedView-linux-x64.zip` / `.tar.gz` / `SpeedView-linux-x64-Setup`
 
 Verify integrity using the accompanying `.sha256` file if desired.
 
@@ -118,26 +121,27 @@ SpeedView includes an automated GitHub Actions release pipeline in [`.github/wor
 Whenever you push a semantic version tag matching `v*` (for example `v1.0.1`), GitHub Actions automatically:
 
 1. **Verifies Code & Tests** on `ubuntu-latest` (under `xvfb-run`), `windows-latest`, and `macos-latest` (`QT_QPA_PLATFORM=offscreen`).
-2. **Packages Standalone Releases** via [`speedview.spec`](speedview.spec) (`--windowed --collect-submodules speedview`):
-   - Windows: `SpeedView.exe`, `SpeedView-windows-x64.zip` + `SpeedView-windows-x64.sha256`
+2. **Packages `onedir` App Bundles, GUI Setup & MSI** via [`speedview.spec`](speedview.spec), [`speedview_installer.spec`](speedview_installer.spec), and [`installer/windows/SpeedView.wxs`](installer/windows/SpeedView.wxs):
+   - Windows: `SpeedView-windows-x64.msi`, `SpeedView-Setup.exe`, `SpeedView-windows-x64.zip` + `SpeedView-windows-x64.sha256`
    - macOS: `SpeedView-macos.zip` (`SpeedView.app`) + `SpeedView-macos.zip.sha256`
-   - Linux: `SpeedView-linux-x64.zip`, `SpeedView-linux-x64`, `SpeedView-linux-x64.tar.gz` + `SpeedView-linux-x64.sha256`
-3. **Publishes a GitHub Release** automatically with generated release notes and attaches all `.zip` bundles, binaries, and SHA-256 checksums.
+   - Linux: `SpeedView-linux-x64.zip`, `SpeedView-linux-x64.tar.gz`, `SpeedView-linux-x64-Setup` + `SpeedView-linux-x64.sha256`
+3. **Publishes a GitHub Release** automatically with generated release notes and attaches all installers, `.zip` bundles, and SHA-256 checksums.
 
 ```bash
-# Bump APP_VERSION in speedview/config/config.py, commit, then push a tag:
+# Bump APP_VERSION & RELEASE_HISTORY in speedview/config/config.py (plus CHANGELOG.md), commit, then push a tag:
 git tag v1.0.1
 git push origin v1.0.1
 ```
 
 You can also trigger a dry-run build manually from the GitHub **Actions → SpeedView Release Build → Run workflow** button (`workflow_dispatch`) without creating a release.
 
-### Build `SpeedView.exe` Locally on Windows
+### Build Windows `onedir`, GUI Setup `.exe`, and `.msi` Locally
 
-PyInstaller builds native Windows PE executables when executed on Windows (it does not cross-compile `.exe` binaries from Linux/macOS):
+PyInstaller builds native Windows PE executables and WiX v4 builds `.msi` packages when run on Windows (Linux/macOS cannot cross-compile native Windows `.exe`/`.msi` binaries):
 
 ```bat
-:: Option 1: Double-click or run the automated Windows build script (outputs dist\SpeedView.exe + .zip + .sha256)
+:: Option 1: Double-click or run the automated Windows build script
+:: Outputs dist\SpeedView\SpeedView.exe, dist\SpeedView-Setup.exe, dist\SpeedView-windows-x64.msi (if WiX installed), & .zip
 scripts\build_windows.bat
 ```
 
@@ -145,19 +149,19 @@ scripts\build_windows.bat
 # Option 2: PowerShell script
 .\scripts\build_windows.ps1
 
-# Option 3: Direct PyInstaller build via speedview.spec
+# Option 3: Manual PyInstaller + GUI Setup build
 pip install -r requirements.txt
 pyinstaller --noconfirm --clean speedview.spec
+pyinstaller --noconfirm --clean speedview_installer.spec
 ```
 
-The standalone `dist\SpeedView.exe` and `dist\SpeedView-windows-x64.zip` are written to `dist\`.
-
 ### Local PyInstaller Build (Linux / macOS)
-To package a standalone executable locally on Linux or macOS using [`speedview.spec`](speedview.spec):
+To package an extracted bundle and GUI Setup binary locally on Linux or macOS:
 
 ```bash
 pip install -r requirements.txt
 pyinstaller --noconfirm --clean speedview.spec
+pyinstaller --noconfirm --clean speedview_installer.spec
 ```
 
 ---

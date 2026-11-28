@@ -13,10 +13,11 @@ from PyQt5.QtCore import Qt
 from speedview.config.config import (
     APP_FEATURES,
     APP_VERSION,
-    CURRENT_CHANGELOG,
     DEFAULT_RELEASES_PAGE_URL,
 )
 from speedview.ui.update_dialog import UpdateDialog
+from speedview.update.updater import UpdateChecker
+from speedview.utils.icon_utils import get_app_icon
 
 
 ABOUT_DIALOG_QSS = """
@@ -83,17 +84,19 @@ QPushButton#primaryBtn:hover {
 
 
 class AboutDialog(QDialog):
-    """About dialog displaying SpeedView's current features and release changelog."""
+    """About dialog displaying SpeedView's current features and full release changelog history."""
 
     def __init__(self, parent=None, settings=None):
         super().__init__(parent)
         self.settings = settings
+        self.updater = UpdateChecker(settings=self.settings)
         self.init_ui()
 
     def init_ui(self):
         self.setWindowTitle(f"About SpeedView v{APP_VERSION}")
-        self.setMinimumSize(500, 480)
-        self.resize(520, 520)
+        self.setWindowIcon(get_app_icon())
+        self.setMinimumSize(540, 540)
+        self.resize(580, 580)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
         self.setAutoFillBackground(True)
@@ -105,17 +108,27 @@ class AboutDialog(QDialog):
 
         header = QFrame(self)
         header.setObjectName("aboutHeader")
-        header_layout = QVBoxLayout(header)
-        header_layout.setContentsMargins(14, 12, 14, 12)
-        header_layout.setSpacing(3)
+        header_row = QHBoxLayout(header)
+        header_row.setContentsMargins(14, 12, 14, 12)
+        header_row.setSpacing(12)
 
+        icon_label = QLabel(self)
+        icon = get_app_icon()
+        if not icon.isNull():
+            icon_label.setPixmap(icon.pixmap(44, 44))
+        icon_label.setFixedSize(44, 44)
+        header_row.addWidget(icon_label)
+
+        header_text_col = QVBoxLayout()
+        header_text_col.setSpacing(3)
         title_label = QLabel("SpeedView — Network Speed Meter")
         title_label.setObjectName("aboutTitle")
         self.version_label = QLabel(f"Version v{APP_VERSION}  •  Cross-Platform PyQt5 & SVG  •  MIT License")
         self.version_label.setObjectName("aboutMeta")
+        header_text_col.addWidget(title_label)
+        header_text_col.addWidget(self.version_label)
+        header_row.addLayout(header_text_col, 1)
 
-        header_layout.addWidget(title_label)
-        header_layout.addWidget(self.version_label)
         layout.addWidget(header)
 
         features_heading = QLabel("CURRENT FEATURES")
@@ -127,14 +140,14 @@ class AboutDialog(QDialog):
         self.features_view.setPlainText("\n".join(f"• {item}" for item in APP_FEATURES))
         layout.addWidget(self.features_view, 1)
 
-        changelog_heading = QLabel(f"CHANGELOG — v{APP_VERSION}")
+        changelog_heading = QLabel("RELEASE CHANGELOG & FEATURES (ALL VERSIONS)")
         changelog_heading.setObjectName("sectionHeading")
         layout.addWidget(changelog_heading)
 
         self.changelog_view = QTextEdit(self)
         self.changelog_view.setReadOnly(True)
-        self.changelog_view.setPlainText("\n".join(f"• {entry}" for entry in CURRENT_CHANGELOG))
-        layout.addWidget(self.changelog_view, 1)
+        self._load_changelog_history(force_remote=False)
+        layout.addWidget(self.changelog_view, 2)
 
         footer = QHBoxLayout()
         footer.setSpacing(8)
@@ -142,6 +155,10 @@ class AboutDialog(QDialog):
         releases_btn = QPushButton("GitHub Releases")
         releases_btn.clicked.connect(lambda: webbrowser.open(DEFAULT_RELEASES_PAGE_URL))
         footer.addWidget(releases_btn)
+
+        refresh_btn = QPushButton("Refresh Releases")
+        refresh_btn.clicked.connect(lambda: self._load_changelog_history(force_remote=True))
+        footer.addWidget(refresh_btn)
 
         updates_btn = QPushButton("Check for Updates")
         updates_btn.clicked.connect(self.open_updater)
@@ -156,6 +173,16 @@ class AboutDialog(QDialog):
 
         layout.addLayout(footer)
 
+    def _load_changelog_history(self, force_remote=False):
+        if force_remote:
+            self.updater.fetch_all_releases(force=True)
+        markdown_text = self.updater.get_all_changelogs_markdown(include_builtin=True)
+        if hasattr(self.changelog_view, "setMarkdown"):
+            self.changelog_view.setMarkdown(markdown_text)
+        else:
+            self.changelog_view.setPlainText(markdown_text)
+
     def open_updater(self):
         dialog = UpdateDialog(parent=self, settings=self.settings, force_check=True)
         dialog.exec_()
+        self._load_changelog_history(force_remote=False)

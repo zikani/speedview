@@ -31,6 +31,7 @@ from speedview.controllers.speed_controller import SpeedController
 from speedview.models.settings import Settings
 from speedview.models.data_usage import DataUsageTracker
 from speedview.update.updater import UpdateChecker
+from speedview.utils.icon_utils import get_app_icon
 from .update_dialog import UpdateDialog
 
 
@@ -92,6 +93,7 @@ class MainWindow(QWidget):
         """Initialize the frameless translucent SVG user interface (no menu bar or box background)."""
         logging.info("Starting setup_ui in MainWindow...")
         self.setWindowTitle("SpeedView - Network Monitor")
+        self.setWindowIcon(get_app_icon())
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("MainWindow { background: transparent; }")

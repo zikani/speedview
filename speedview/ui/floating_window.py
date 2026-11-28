@@ -4,6 +4,7 @@ from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt, QTimer, QByteArray, pyqtSignal
 from PyQt5.QtGui import QKeySequence
 from speedview.utils.svg_utils import apply_rounded_mask, update_floating_svg
+from speedview.utils.icon_utils import get_app_icon
 from speedview.ui.resources.svg_templates import FLOATING_SVG_TEMPLATE
 
 
@@ -42,6 +43,7 @@ class FloatingWindow(QWidget):
     def setup_ui(self):
         """Initialize the compact transparent UI (signal + speed only)."""
         self.setWindowTitle("SpeedView - Floating Mode")
+        self.setWindowIcon(get_app_icon())
         self.setFixedSize(136, 40)
         apply_rounded_mask(self, 0, 0, 136, 40, radius=14)
 

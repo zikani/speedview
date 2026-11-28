@@ -22,10 +22,15 @@ from PyQt5.QtCore import Qt
 import psutil
 
 from speedview.config.config import APP_VERSION
-from speedview.config.windows import apply_startup_setting
+from speedview.config.windows import (
+    apply_startup_setting,
+    create_desktop_shortcut,
+    get_desktop_shortcut_path,
+)
 from speedview.ui.about_dialog import AboutDialog
 from speedview.ui.update_dialog import UpdateDialog
 from speedview.update.updater import UpdateChecker
+from speedview.utils.icon_utils import get_app_icon
 
 
 SETTINGS_MODERN_QSS = """
@@ -199,6 +204,7 @@ class SettingsDialog(QDialog):
 
     def setup_ui(self):
         self.setWindowTitle("SpeedView Settings")
+        self.setWindowIcon(get_app_icon())
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
         self.setAutoFillBackground(True)
@@ -412,8 +418,33 @@ class SettingsDialog(QDialog):
         )
         layout.addWidget(self.auto_update_checkbox)
 
+        shortcut_row = QHBoxLayout()
+        shortcut_row.setSpacing(8)
+        self.desktop_shortcut_btn = QPushButton("Create Desktop Shortcut")
+        self.desktop_shortcut_btn.setToolTip("Place a SpeedView shortcut icon on your Desktop")
+        self.desktop_shortcut_btn.clicked.connect(self.create_desktop_shortcut_action)
+        shortcut_row.addWidget(self.desktop_shortcut_btn)
+        shortcut_row.addStretch(1)
+        layout.addLayout(shortcut_row)
+
         group.setLayout(layout)
         self.layout.addWidget(group)
+
+    def create_desktop_shortcut_action(self):
+        """Create a Desktop shortcut for launching SpeedView."""
+        ok = create_desktop_shortcut()
+        if ok:
+            QMessageBox.information(
+                self,
+                "Desktop Shortcut Created",
+                f"SpeedView shortcut created at:\n{get_desktop_shortcut_path()}",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Desktop Shortcut Error",
+                "Could not create Desktop shortcut. Check folder permissions and try again.",
+            )
 
     def create_display_group(self):
         """Create display settings card."""

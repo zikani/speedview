@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build-linux:
-    name: Build Linux Binary (PyInstaller)
+    name: Build Linux Package (PyInstaller)
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -54,38 +54,32 @@ jobs:
 
       - name: Verify bytecode & run unit tests under Xvfb
         run: |
-          python -m compileall -q main.py speedview tests
+          python -m compileall -q main.py installer.py speedview tests
           xvfb-run -a python -m unittest discover -s tests -v
 
-      - name: Build standalone Linux binary with PyInstaller
+      - name: Build Linux onedir bundle & Setup binary with PyInstaller
         run: |
-          pyinstaller \
-            --noconfirm \
-            --clean \
-            --onefile \
-            --windowed \
-            --name SpeedView-linux-x64 \
-            --collect-submodules speedview \
-            --hidden-import PyQt5.QtSvg \
-            --hidden-import PyQt5.QtXml \
-            main.py
-          chmod +x dist/SpeedView-linux-x64
-          tar -C dist -czf dist/SpeedView-linux-x64.tar.gz SpeedView-linux-x64
-          (cd dist && python -m zipfile -c SpeedView-linux-x64.zip SpeedView-linux-x64)
-          (cd dist && sha256sum SpeedView-linux-x64 SpeedView-linux-x64.tar.gz SpeedView-linux-x64.zip > SpeedView-linux-x64.sha256)
+          pyinstaller --noconfirm --clean speedview.spec
+          chmod +x dist/SpeedView/SpeedView
+          tar -C dist -czf dist/SpeedView-linux-x64.tar.gz SpeedView
+          (cd dist/SpeedView && python -m zipfile -c ../SpeedView-linux-x64.zip .)
+          pyinstaller --noconfirm --clean speedview_installer.spec
+          chmod +x dist/SpeedView-Setup
+          mv dist/SpeedView-Setup dist/SpeedView-linux-x64-Setup
+          (cd dist && sha256sum SpeedView-linux-x64.tar.gz SpeedView-linux-x64.zip SpeedView-linux-x64-Setup > SpeedView-linux-x64.sha256)
 
       - name: Upload Linux release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: speedview-linux-x64
           path: |
-            dist/SpeedView-linux-x64
             dist/SpeedView-linux-x64.tar.gz
             dist/SpeedView-linux-x64.zip
+            dist/SpeedView-linux-x64-Setup
             dist/SpeedView-linux-x64.sha256
 
   build-windows:
-    name: Build Windows Executable (PyInstaller)
+    name: Build Windows App, GUI Setup & MSI (PyInstaller + WiX)
     runs-on: windows-latest
     steps:
       - name: Check out repository
@@ -102,21 +96,31 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Install WiX Toolset v4 for GUI MSI builds
+        run: |
+          dotnet tool install --global wix --version 4.0.5
+          wix extension add -g WixToolset.UI.wixext/4.0.5
+
       - name: Verify bytecode & run unit tests
         run: |
-          python -m compileall -q main.py speedview tests
+          python -m compileall -q main.py installer.py speedview tests
           python -m unittest discover -s tests -v
 
-      - name: Build standalone Windows SpeedView.exe & .zip with PyInstaller
+      - name: Build onedir SpeedView, GUI Setup.exe, MSI, & .zip
         shell: pwsh
         run: |
           pyinstaller --noconfirm --clean speedview.spec
-          Compress-Archive -Path dist\SpeedView.exe -DestinationPath dist\SpeedView-windows-x64.zip -Force
-          $exeHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView.exe).Hash.ToLower()
+          pyinstaller --noconfirm --clean speedview_installer.spec
+          $AppVersion = (python -c "from speedview.config.config import APP_VERSION; print(APP_VERSION)").Trim()
+          wix build installer\windows\SpeedView.wxs -ext WixToolset.UI.wixext -d "AppVersion=$AppVersion" -arch x64 -o dist\SpeedView-windows-x64.msi
+          Compress-Archive -Path dist\SpeedView\* -DestinationPath dist\SpeedView-windows-x64.zip -Force
           $zipHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-windows-x64.zip).Hash.ToLower()
+          $setupHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-Setup.exe).Hash.ToLower()
+          $msiHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-windows-x64.msi).Hash.ToLower()
           @(
-            "$exeHash  SpeedView.exe"
             "$zipHash  SpeedView-windows-x64.zip"
+            "$setupHash  SpeedView-Setup.exe"
+            "$msiHash  SpeedView-windows-x64.msi"
           ) | Out-File -Encoding ascii dist\SpeedView-windows-x64.sha256
 
       - name: Upload Windows release artifacts
@@ -124,7 +128,8 @@ jobs:
         with:
           name: speedview-windows-x64
           path: |
-            dist/SpeedView.exe
+            dist/SpeedView-Setup.exe
+            dist/SpeedView-windows-x64.msi
             dist/SpeedView-windows-x64.zip
             dist/SpeedView-windows-x64.sha256
 
@@ -150,7 +155,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          python -m compileall -q main.py speedview tests
+          python -m compileall -q main.py installer.py speedview tests
           python -m unittest discover -s tests -v
 
       - name: Build standalone macOS .app.zip with PyInstaller
@@ -189,12 +194,13 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            release-assets/SpeedView.exe
+            release-assets/SpeedView-Setup.exe
+            release-assets/SpeedView-windows-x64.msi
             release-assets/SpeedView-windows-x64.zip
             release-assets/SpeedView-windows-x64.sha256
-            release-assets/SpeedView-linux-x64
             release-assets/SpeedView-linux-x64.tar.gz
             release-assets/SpeedView-linux-x64.zip
+            release-assets/SpeedView-linux-x64-Setup
             release-assets/SpeedView-linux-x64.sha256
             release-assets/SpeedView-macos.zip
             release-assets/SpeedView-macos.zip.sha256

@@ -4,6 +4,7 @@ import traceback
 from PyQt5.QtWidgets import QApplication
 from speedview.app import NetworkSpeedMeter
 from speedview.ui.update_dialog import UpdateDialog
+from speedview.utils.icon_utils import get_app_icon
 
 
 def check_updates_on_startup(settings=None, force=False):
@@ -20,6 +21,7 @@ if __name__ == '__main__':
         logging.info('Starting SpeedView application')
         app = QApplication(sys.argv)
         app.setQuitOnLastWindowClosed(False)
+        app.setWindowIcon(get_app_icon())
 
         window = NetworkSpeedMeter()
         logging.info('Background auto-updater scheduled on a 3-day check interval')

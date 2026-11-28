@@ -43,7 +43,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Check Python syntax and bytecode compilation
-        run: python -m compileall -q main.py speedview tests
+        run: python -m compileall -q main.py installer.py speedview tests
 
       - name: Run unit tests under Xvfb
         run: xvfb-run -a python -m unittest discover -s tests -v
@@ -66,7 +66,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Check Python syntax and bytecode compilation
-        run: python -m compileall -q main.py speedview tests
+        run: python -m compileall -q main.py installer.py speedview tests
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v

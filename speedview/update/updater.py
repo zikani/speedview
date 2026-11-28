@@ -1,3 +1,4 @@
+import json
 import os
 import platform
 import shutil
@@ -13,10 +14,23 @@ from packaging import version
 
 from ..config.config import (
     APP_VERSION,
+    DEFAULT_RELEASES_API_URL,
     DEFAULT_RELEASES_PAGE_URL,
     DEFAULT_UPDATE_URL,
+    RELEASE_HISTORY,
+    RELEASES_CACHE_FILE,
     UPDATE_CHECK_INTERVAL_SECONDS,
 )
+
+
+def _safe_parse_version(ver_str):
+    cleaned = str(ver_str or "").lstrip("v").strip()
+    if not cleaned:
+        return version.Version("0.0.0")
+    try:
+        return version.parse(cleaned)
+    except Exception:
+        return version.Version("0.0.0")
 
 
 class UpdateChecker:
@@ -26,10 +40,10 @@ class UpdateChecker:
     Enforces a 3-day check cooldown via settings.last_update_check to avoid
     GitHub API rate limits, downloads .zip release assets into a temp folder,
     extracts safely, and launches a detached helper script so the running app
-    can exit, replace its files/executable cleanly, and restart.
+    can exit, replace its files/folder cleanly, and restart.
     """
 
-    def __init__(self, settings=None, check_interval=UPDATE_CHECK_INTERVAL_SECONDS):
+    def __init__(self, settings=None, check_interval=UPDATE_CHECK_INTERVAL_SECONDS, releases_cache_file=None):
         self.settings = settings
         self.check_interval = int(check_interval)
         self.current_version = APP_VERSION
@@ -37,16 +51,32 @@ class UpdateChecker:
             self.github_api_url = settings.update_url
         else:
             self.github_api_url = DEFAULT_UPDATE_URL
+        self.releases_api_url = self._derive_releases_api_url(self.github_api_url)
+        self.releases_cache_file = releases_cache_file or RELEASES_CACHE_FILE
+
         self.update_available = False
         self.latest_version = None
         self.release_notes = None
         self.download_url = None
         self.asset_name = None
         self.release_page_url = DEFAULT_RELEASES_PAGE_URL
+        self.source_zip_url = None
+        self.all_releases = []
         self.staged_dir = None
         self.extracted_dir = None
         self.last_helper_script = None
         self.last_helper_process = None
+
+    @staticmethod
+    def _derive_releases_api_url(api_url):
+        url = (api_url or DEFAULT_UPDATE_URL).rstrip("/")
+        if url.endswith("/releases/latest"):
+            return url[:-len("/latest")]
+        if url.endswith("/releases"):
+            return url
+        if url == DEFAULT_UPDATE_URL.rstrip("/"):
+            return DEFAULT_RELEASES_API_URL
+        return None
 
     def should_check_for_updates(self, force=False):
         """Return True when forced or when >= 3 days elapsed since last check."""
@@ -70,6 +100,194 @@ class UpdateChecker:
         except Exception as e:
             print(f"Could not persist last_update_check timestamp: {e}")
 
+    def _load_cached_releases(self):
+        """Load previously fetched GitHub releases from disk cache."""
+        if not self.releases_cache_file or not os.path.isfile(self.releases_cache_file):
+            return []
+        try:
+            with open(self.releases_cache_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                return [item for item in data if isinstance(item, dict) and item.get("version")]
+        except Exception:
+            pass
+        return []
+
+    def _save_cached_releases(self, releases):
+        """Persist normalized GitHub release records atomically for offline changelog viewing."""
+        if not self.releases_cache_file:
+            return
+        try:
+            cache_dir = os.path.dirname(self.releases_cache_file)
+            if cache_dir:
+                os.makedirs(cache_dir, exist_ok=True)
+            tmp_file = self.releases_cache_file + ".tmp"
+            with open(tmp_file, "w", encoding="utf-8") as f:
+                json.dump(releases, f, indent=2)
+            os.replace(tmp_file, self.releases_cache_file)
+        except Exception as e:
+            print(f"Could not save releases cache: {e}")
+
+    @staticmethod
+    def _normalize_github_release(item):
+        if not isinstance(item, dict):
+            return None
+        tag = str(item.get("tag_name") or item.get("version") or "").lstrip("v").strip()
+        if not tag:
+            return None
+        published_at = str(item.get("published_at") or item.get("date") or "")
+        date_str = published_at[:10] if len(published_at) >= 10 else published_at
+        return {
+            "version": tag,
+            "date": date_str,
+            "title": str(item.get("name") or "").strip(),
+            "body": str(item.get("body") or "").strip(),
+            "html_url": item.get("html_url") or DEFAULT_RELEASES_PAGE_URL,
+            "zipball_url": item.get("zipball_url"),
+            "assets": item.get("assets") or [],
+            "features": list(item.get("features") or []),
+            "changes": list(item.get("changes") or []),
+        }
+
+    def _merge_releases(self, remote_releases=None, include_builtin=True):
+        """Merge remote/cached releases with built-in RELEASE_HISTORY newest-first without losing detail."""
+        merged = {}
+
+        if include_builtin:
+            for entry in RELEASE_HISTORY:
+                ver = str(entry.get("version", "")).lstrip("v").strip()
+                if not ver:
+                    continue
+                merged[ver] = {
+                    "version": ver,
+                    "date": entry.get("date", ""),
+                    "title": entry.get("title", ""),
+                    "features": list(entry.get("features") or []),
+                    "changes": list(entry.get("changes") or []),
+                    "body": "",
+                    "html_url": DEFAULT_RELEASES_PAGE_URL,
+                }
+
+        for source_list in (self._load_cached_releases(), remote_releases or []):
+            for raw in source_list:
+                norm = self._normalize_github_release(raw)
+                if not norm:
+                    continue
+                ver = norm["version"]
+                existing = merged.get(ver)
+                if existing:
+                    if norm.get("date") and not existing.get("date"):
+                        existing["date"] = norm["date"]
+                    if norm.get("title"):
+                        existing["title"] = norm["title"]
+                    if norm.get("body"):
+                        existing["body"] = norm["body"]
+                    if norm.get("features"):
+                        existing["features"] = norm["features"]
+                    if norm.get("changes"):
+                        existing["changes"] = norm["changes"]
+                    if norm.get("html_url"):
+                        existing["html_url"] = norm["html_url"]
+                else:
+                    merged[ver] = norm
+
+        ordered = sorted(
+            merged.values(),
+            key=lambda item: _safe_parse_version(item.get("version")),
+            reverse=True,
+        )
+        return ordered
+
+    @staticmethod
+    def format_release_entry_markdown(entry):
+        """Format one release record (features + changelog / release notes) as clean Markdown."""
+        ver = str(entry.get("version", "")).lstrip("v").strip()
+        title = str(entry.get("title") or "").strip()
+        date_str = str(entry.get("date") or "").strip()
+        heading = f"## v{ver}"
+        if title and title.lower() not in (f"v{ver}".lower(), ver.lower()):
+            heading += f" — {title}"
+        if date_str:
+            heading += f" ({date_str})"
+
+        lines = [heading]
+        features = entry.get("features") or []
+        changes = entry.get("changes") or []
+        body = (entry.get("body") or "").strip()
+
+        if features:
+            lines.append("### Features")
+            lines.extend(f"- {feat}" for feat in features)
+
+        if changes:
+            lines.append("### Changelog")
+            lines.extend(f"- {chg}" for chg in changes)
+        elif body:
+            lines.append(body)
+        elif not features:
+            lines.append("- Maintenance and stability improvements")
+
+        return "\n".join(lines)
+
+    def get_all_changelogs_markdown(self, since_version=None, include_builtin=True, releases=None):
+        """Return combined Markdown of all released versions' features and changelogs."""
+        records = self._merge_releases(releases, include_builtin=include_builtin)
+        if since_version:
+            base_ver = _safe_parse_version(since_version)
+            records = [r for r in records if _safe_parse_version(r.get("version")) > base_ver]
+        if not records:
+            return "No release changelog entries available."
+        return "\n\n".join(self.format_release_entry_markdown(r) for r in records)
+
+    def fetch_all_releases(self, force=False):
+        """Fetch all GitHub releases (or cached/fallback single release) and cache them."""
+        cached = self._load_cached_releases()
+        if not self.should_check_for_updates(force=force) and cached:
+            self.all_releases = self._merge_releases(cached, include_builtin=True)
+            return self.all_releases
+
+        headers = {
+            "User-Agent": f"SpeedView/{self.current_version}",
+            "Accept": "application/vnd.github+json",
+        }
+        fetched_raw = []
+        endpoints = []
+        if self.releases_api_url:
+            sep = "&" if "?" in self.releases_api_url else "?"
+            endpoints.append(f"{self.releases_api_url}{sep}per_page=30")
+        if self.github_api_url and self.github_api_url not in endpoints:
+            endpoints.append(self.github_api_url)
+
+        for url in endpoints:
+            try:
+                resp = requests.get(url, headers=headers, timeout=10)
+                if resp.status_code == 404:
+                    continue
+                resp.raise_for_status()
+                payload = resp.json()
+                if isinstance(payload, list):
+                    fetched_raw = [r for r in payload if not r.get("draft")]
+                    break
+                if isinstance(payload, dict) and payload.get("tag_name"):
+                    fetched_raw = [payload]
+                    break
+            except Exception as e:
+                print(f"Release history fetch failed for {url}: {e}")
+
+        if fetched_raw:
+            normalized = []
+            for item in fetched_raw:
+                norm = self._normalize_github_release(item)
+                if norm:
+                    normalized.append(norm)
+            if normalized:
+                self._save_cached_releases(normalized)
+                self.all_releases = self._merge_releases(normalized, include_builtin=True)
+                return self.all_releases
+
+        self.all_releases = self._merge_releases(cached, include_builtin=True)
+        return self.all_releases
+
     def _select_asset_for_platform(self, assets, system_name=None):
         """Pick best release asset (preferring OS-matching .zip archive) from GitHub assets list."""
         system = (system_name or platform.system()).lower()
@@ -87,6 +305,7 @@ class UpdateChecker:
             priorities = [
                 lambda n: n.endswith('.zip') and ('win' in n or 'windows' in n),
                 lambda n: n.endswith('.zip') and not any(k in n for k in ('linux', 'mac', 'darwin', 'osx')),
+                lambda n: n.endswith('.msi'),
                 lambda n: n.endswith('.exe'),
             ]
         elif system == "darwin":
@@ -118,11 +337,12 @@ class UpdateChecker:
         self.download_url = None
         self.asset_name = None
 
+        headers = {
+            "User-Agent": f"SpeedView/{self.current_version}",
+            "Accept": "application/vnd.github+json",
+        }
+
         try:
-            headers = {
-                "User-Agent": f"SpeedView/{self.current_version}",
-                "Accept": "application/vnd.github+json",
-            }
             response = requests.get(self.github_api_url, headers=headers, timeout=10)
             self._record_check_timestamp()
 
@@ -130,17 +350,68 @@ class UpdateChecker:
                 response.raise_for_status()
             except requests.exceptions.HTTPError as http_err:
                 print(f"Update check HTTP error: {http_err}")
+                self.all_releases = self._merge_releases(include_builtin=True)
+                if not self.release_notes:
+                    self.release_notes = self.get_all_changelogs_markdown(include_builtin=True)
                 return False
 
-            data = response.json()
-            self.latest_version = str(data.get('tag_name', '')).lstrip('v').strip()
-            self.release_notes = data.get('body') or 'No release notes available'
-            self.release_page_url = data.get('html_url') or DEFAULT_RELEASES_PAGE_URL
-            self.source_zip_url = data.get('zipball_url')
+            raw_json = response.json()
+            raw_list = []
+            latest_data = None
 
-            if self.latest_version and version.parse(self.latest_version) > version.parse(self.current_version):
+            if isinstance(raw_json, list):
+                raw_list = [r for r in raw_json if isinstance(r, dict) and not r.get("draft")]
+                if raw_list:
+                    raw_list.sort(key=lambda r: _safe_parse_version(r.get("tag_name")), reverse=True)
+                    latest_data = raw_list[0]
+            elif isinstance(raw_json, dict):
+                latest_data = raw_json
+                raw_list = [raw_json]
+                # Opportunistically fetch full release history if configured URL is GitHub /releases/latest
+                if self.releases_api_url and self.releases_api_url != self.github_api_url.rstrip("/"):
+                    try:
+                        sep = "&" if "?" in self.releases_api_url else "?"
+                        hist_resp = requests.get(
+                            f"{self.releases_api_url}{sep}per_page=30",
+                            headers=headers,
+                            timeout=8,
+                        )
+                        if hist_resp.ok and isinstance(hist_resp.json(), list):
+                            hist_items = [r for r in hist_resp.json() if isinstance(r, dict) and not r.get("draft")]
+                            if hist_items:
+                                raw_list = hist_items
+                    except Exception:
+                        pass
+
+            if not latest_data:
+                self.all_releases = self._merge_releases(include_builtin=True)
+                self.release_notes = self.get_all_changelogs_markdown(include_builtin=True)
+                return False
+
+            normalized_remote = [
+                n for n in (self._normalize_github_release(item) for item in raw_list) if n is not None
+            ]
+            if normalized_remote:
+                self._save_cached_releases(normalized_remote)
+
+            self.all_releases = self._merge_releases(normalized_remote, include_builtin=True)
+            self.latest_version = str(latest_data.get('tag_name', '')).lstrip('v').strip()
+            self.release_page_url = latest_data.get('html_url') or DEFAULT_RELEASES_PAGE_URL
+            self.source_zip_url = latest_data.get('zipball_url')
+
+            if self.latest_version and _safe_parse_version(self.latest_version) > _safe_parse_version(self.current_version):
                 self.update_available = True
-                asset_url, asset_name = self._select_asset_for_platform(data.get('assets', []))
+                newer_notes = self.get_all_changelogs_markdown(
+                    since_version=self.current_version,
+                    include_builtin=False,
+                    releases=normalized_remote,
+                )
+                if newer_notes and "No release changelog" not in newer_notes:
+                    self.release_notes = newer_notes
+                else:
+                    self.release_notes = latest_data.get('body') or 'No release notes available'
+
+                asset_url, asset_name = self._select_asset_for_platform(latest_data.get('assets', []))
                 if not getattr(sys, 'frozen', False) and self.source_zip_url:
                     self.download_url = self.source_zip_url
                     self.asset_name = f"SpeedView-{self.latest_version}-source.zip"
@@ -152,9 +423,17 @@ class UpdateChecker:
                     self.asset_name = f"SpeedView-{self.latest_version}-source.zip"
                 else:
                     self.download_url = self.release_page_url
+            else:
+                self.release_notes = self.get_all_changelogs_markdown(
+                    include_builtin=True,
+                    releases=normalized_remote,
+                )
             return self.update_available
         except Exception as e:
             print(f"Update check failed: {e}")
+            self.all_releases = self._merge_releases(include_builtin=True)
+            if not self.release_notes:
+                self.release_notes = self.get_all_changelogs_markdown(include_builtin=True)
             return False
 
     def open_release_page(self):
@@ -268,6 +547,20 @@ class UpdateChecker:
             return os.path.isfile(os.path.join(inner, "main.py")) and os.path.isdir(os.path.join(inner, "speedview"))
         return False
 
+    @staticmethod
+    def _is_onedir_bundle(path):
+        """Return True when directory holds a PyInstaller onedir layout (exe + _internal/libs)."""
+        if not path or not os.path.isdir(path):
+            return False
+        entries = os.listdir(path)
+        if "_internal" in entries and os.path.isdir(os.path.join(path, "_internal")):
+            return True
+        has_binary = any(
+            name.endswith(".exe") or name in ("SpeedView", "SpeedView-linux-x64")
+            for name in entries
+        )
+        return has_binary and len(entries) > 1
+
     def can_self_replace(self, target_path=None):
         """Return True when a valid frozen executable, explicit target, or source checkout can be updated."""
         if target_path or getattr(sys, 'frozen', False):
@@ -281,10 +574,28 @@ class UpdateChecker:
             return sys.executable
         return shutil.which("python3") or shutil.which("python")
 
+    @staticmethod
+    def _is_dir_writable(path):
+        target_dir = path if os.path.isdir(path) else os.path.dirname(os.path.abspath(path))
+        if not os.path.isdir(target_dir):
+            return True
+        return os.access(target_dir, os.W_OK)
+
+    @staticmethod
+    def _launch_elevated_windows(executable, arguments=""):
+        """Prompt UAC elevation on Windows when updating protected directories like Program Files."""
+        try:
+            import ctypes
+            rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, arguments, None, 1)
+            return int(rc) > 32
+        except Exception as e:
+            print(f"Windows elevated updater launch failed: {e}")
+            return False
+
     def install_update(self, update_file, target_path=None, restart=True, launch_script=True, wait_pid=None):
         """
         Spawn a detached Python helper subprocess (or shell fallback if frozen without system Python)
-        that waits for the running process to exit, replaces the old executable/bundle/source files
+        that waits for the running process to exit, replaces the old executable/onedir/bundle
         from the temp staging directory, cleans up temp files, and restarts the updated app.
         """
         try:
@@ -306,6 +617,11 @@ class UpdateChecker:
             pid_to_wait = os.getpid() if wait_pid is None else int(wait_pid)
             python_exe = self._resolve_python_executable()
             system = platform.system()
+            needs_windows_elevation = (
+                system == "Windows"
+                and launch_script
+                and not self._is_dir_writable(resolved_target)
+            )
 
             if python_exe:
                 script_path = self._create_python_updater_script(
@@ -318,6 +634,8 @@ class UpdateChecker:
                 )
                 self.last_helper_script = script_path
                 if launch_script:
+                    if needs_windows_elevation:
+                        return self._launch_elevated_windows(python_exe, f'"{script_path}"')
                     kwargs = {"close_fds": True}
                     if system == "Windows":
                         kwargs["creationflags"] = (
@@ -344,6 +662,8 @@ class UpdateChecker:
                 )
                 self.last_helper_script = script_path
                 if launch_script:
+                    if needs_windows_elevation:
+                        return self._launch_elevated_windows("cmd.exe", f'/c "{script_path}"')
                     flags = (
                         getattr(subprocess, "CREATE_NO_WINDOW", 0)
                         | getattr(subprocess, "DETACHED_PROCESS", 0)
@@ -379,10 +699,20 @@ class UpdateChecker:
             print(f"Installation failed: {e}")
             return False
 
+    @staticmethod
+    def _find_relaunch_binary(dest_dir, preferred_name):
+        for candidate in (preferred_name, "SpeedView.exe", "SpeedView", "SpeedView-linux-x64"):
+            if not candidate:
+                continue
+            full = os.path.join(dest_dir, candidate)
+            if os.path.isfile(full):
+                return full
+        return os.path.join(dest_dir, preferred_name) if preferred_name else dest_dir
+
     def _create_python_updater_script(
         self, payload_path, staged_root, target_path, pid, restart=True, source_run=False
     ):
-        """Create a cross-platform Python helper script to wait for PID, swap files, clean temp dir, and restart."""
+        """Create a cross-platform Python helper script to wait for PID, swap files/onedir, clean temp dir, and restart."""
         target_bundle = self._find_app_bundle_or_binary(target_path)
         target_abs = os.path.abspath(target_bundle)
         target_name = os.path.basename(target_abs)
@@ -402,7 +732,11 @@ class UpdateChecker:
             elif source_run and os.path.isfile(os.path.join(src_entry, "main.py")):
                 relaunch_args = [sys.executable, os.path.join(dest_path, "main.py")]
             else:
-                relaunch_target = target_abs if os.path.isfile(target_abs) else os.path.join(dest_path, target_name)
+                relaunch_target = (
+                    target_abs
+                    if os.path.isfile(target_abs)
+                    else self._find_relaunch_binary(dest_path, target_name)
+                )
                 relaunch_args = [relaunch_target]
         else:
             dest_path = (
@@ -459,6 +793,12 @@ class UpdateChecker:
             "    elif os.path.isdir(SRC_ENTRY):",
             "        os.makedirs(DEST_PATH, exist_ok=True)",
             "        shutil.copytree(SRC_ENTRY, DEST_PATH, dirs_exist_ok=True)",
+            "        if not IS_WINDOWS:",
+            "            for root, _dirs, files in os.walk(DEST_PATH):",
+            "                for fname in files:",
+            "                    if fname in ('SpeedView', 'SpeedView-linux-x64'):",
+            "                        fpath = os.path.join(root, fname)",
+            "                        os.chmod(fpath, os.stat(fpath).st_mode | stat.S_IXUSR)",
             "    else:",
             "        os.makedirs(os.path.dirname(DEST_PATH), exist_ok=True)",
             "        shutil.copy2(SRC_ENTRY, DEST_PATH)",
@@ -496,18 +836,32 @@ class UpdateChecker:
 
     @staticmethod
     def _pick_source_entry(payload_path, target_basename):
-        """Pick the matching file, .app, or unwrapped repo root inside an extracted payload folder."""
+        """Pick the matching file, onedir directory, .app, or unwrapped root inside extracted payload."""
         if os.path.isfile(payload_path):
             return payload_path
         entries = os.listdir(payload_path)
+        if not entries:
+            return payload_path
+
+        # Unwrap single top-level directory (e.g. SpeedView/SpeedView.exe + SpeedView/_internal/)
+        if len(entries) == 1:
+            only_path = os.path.join(payload_path, entries[0])
+            if os.path.isdir(only_path):
+                if only_path.endswith(".app"):
+                    return only_path
+                return only_path
+            return only_path
+
+        # Multi-entry folder: if it is an onedir bundle (e.g. SpeedView.exe + _internal/), return the directory
+        if UpdateChecker._is_onedir_bundle(payload_path):
+            return payload_path
+
         for name in entries:
             if name == target_basename:
                 return os.path.join(payload_path, name)
         for name in entries:
             if name.endswith(('.exe', '.app')):
                 return os.path.join(payload_path, name)
-        if len(entries) == 1:
-            return os.path.join(payload_path, entries[0])
         return payload_path
 
     def _create_windows_updater_script(
@@ -523,7 +877,11 @@ class UpdateChecker:
             if source_run and os.path.isfile(os.path.join(src_entry, "main.py")):
                 restart_cmd = f'start "" "{sys.executable}" "{os.path.join(target_dir, "main.py")}"'
             else:
-                restart_exe = os.path.join(target_dir, target_name) if not os.path.isdir(target_abs) else src_entry
+                restart_exe = (
+                    target_abs
+                    if os.path.isfile(target_abs)
+                    else self._find_relaunch_binary(target_dir, target_name)
+                )
                 restart_cmd = f'start "" "{restart_exe}"'
         else:
             dest_file = target_abs if not os.path.isdir(target_abs) else os.path.join(target_dir, os.path.basename(src_entry))
@@ -587,7 +945,11 @@ class UpdateChecker:
             if source_run and os.path.isfile(os.path.join(src_entry, "main.py")):
                 relaunch_cmd = f"nohup {q(sys.executable)} {q(os.path.join(target_dir, 'main.py'))} >/dev/null 2>&1 &" if restart else ""
             else:
-                relaunch_target = target_bundle if os.path.isfile(target_bundle) else os.path.join(target_dir, target_name)
+                relaunch_target = (
+                    target_bundle
+                    if os.path.isfile(target_bundle)
+                    else self._find_relaunch_binary(target_dir, target_name)
+                )
                 relaunch_cmd = f"nohup {q(relaunch_target)} >/dev/null 2>&1 &" if restart else ""
         else:
             dest_file = (

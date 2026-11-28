@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#080E1A"/>
+    </linearGradient>
+    <linearGradient id="arcGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22D3EE"/>
+      <stop offset="55%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="needleGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <rect x="12" y="12" width="232" height="232" rx="54" fill="url(#bgGrad)" stroke="#1E3A5F" stroke-width="6"/>
+  <circle cx="128" cy="134" r="78" fill="none" stroke="#182742" stroke-width="18" stroke-linecap="round" stroke-dasharray="368 490" transform="rotate(135 128 134)"/>
+  <circle cx="128" cy="134" r="78" fill="none" stroke="url(#arcGrad)" stroke-width="18" stroke-linecap="round" stroke-dasharray="285 490" transform="rotate(135 128 134)"/>
+  <line x1="128" y1="134" x2="178" y2="86" stroke="url(#needleGrad)" stroke-width="11" stroke-linecap="round"/>
+  <circle cx="128" cy="134" r="16" fill="#22D3EE"/>
+  <circle cx="128" cy="134" r="7" fill="#0B1220"/>
+  <path d="M108 192 L128 210 L148 192" fill="none" stroke="#2EE6A6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

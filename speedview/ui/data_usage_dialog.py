@@ -6,6 +6,7 @@ from PyQt5.QtGui import QKeySequence
 
 from speedview.models.data_usage import DataUsageTracker, format_bytes
 from speedview.ui.resources.svg_templates import DATA_USAGE_SVG_TEMPLATE
+from speedview.utils.icon_utils import get_app_icon
 from speedview.utils.svg_utils import apply_rounded_mask, update_data_usage_svg
 
 
@@ -31,6 +32,7 @@ class DataUsageDialog(QWidget):
 
     def setup_ui(self):
         self.setWindowTitle("SpeedView - Data Usage")
+        self.setWindowIcon(get_app_icon())
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")

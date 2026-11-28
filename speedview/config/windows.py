@@ -39,8 +39,13 @@ TRAY_ICON_SIZE = 16
 TRAY_UPDATE_INTERVAL = 1000  # milliseconds
 
 # Installation paths
-INSTALL_DIR = os.path.join(_PROGRAMFILES_BASE, 'NetworkSpeedMeter')
-UNINSTALL_REG_PATH = r'Software\Microsoft\Windows\CurrentVersion\Uninstall\NetworkSpeedMeter'
+if IS_WINDOWS:
+    INSTALL_DIR = os.path.join(os.getenv('PROGRAMFILES') or r'C:\Program Files', 'SpeedView')
+elif platform.system() == 'Darwin':
+    INSTALL_DIR = '/Applications/SpeedView.app'
+else:
+    INSTALL_DIR = os.path.expanduser('~/.local/share/SpeedView')
+UNINSTALL_REG_PATH = r'Software\Microsoft\Windows\CurrentVersion\Uninstall\SpeedView'
 
 
 def _get_launch_command():
@@ -49,6 +54,214 @@ def _get_launch_command():
         return sys.executable, []
     main_py = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'main.py'))
     return sys.executable, [main_py]
+
+
+def get_desktop_shortcut_path():
+    """Return the OS-appropriate desktop shortcut file path."""
+    system = platform.system()
+    desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+    if system == "Windows":
+        return os.path.join(desktop, "SpeedView.lnk")
+    if system == "Darwin":
+        return os.path.join(desktop, "SpeedView.command")
+    return os.path.join(desktop, "speedview.desktop")
+
+
+def _create_windows_lnk(shortcut_path, target_exe, arguments="", icon_path="", working_dir="", description="SpeedView Network Speed Meter"):
+    """Create a Windows .lnk shortcut using win32com/winshell or PowerShell WScript.Shell."""
+    os.makedirs(os.path.dirname(shortcut_path), exist_ok=True)
+    try:
+        import win32com.client
+        shell = win32com.client.Dispatch("WScript.Shell")
+        sc = shell.CreateShortcut(shortcut_path)
+        sc.TargetPath = target_exe
+        if arguments:
+            sc.Arguments = arguments
+        if working_dir:
+            sc.WorkingDirectory = working_dir
+        if icon_path and os.path.exists(icon_path):
+            sc.IconLocation = icon_path
+        sc.Description = description
+        sc.save()
+        return os.path.exists(shortcut_path)
+    except Exception:
+        import subprocess
+        ps_script = (
+            f'$ws = New-Object -ComObject WScript.Shell; '
+            f'$sc = $ws.CreateShortcut("{shortcut_path}"); '
+            f'$sc.TargetPath = "{target_exe}"; '
+            f'$sc.Arguments = "{arguments}"; '
+            f'$sc.WorkingDirectory = "{working_dir}"; '
+            f'$sc.Description = "{description}"; '
+            + (f'$sc.IconLocation = "{icon_path}"; ' if icon_path and os.path.exists(icon_path) else '')
+            + '$sc.Save()'
+        )
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+        )
+        return res.returncode == 0 and os.path.exists(shortcut_path)
+
+
+def create_desktop_shortcut(target_path=None, icon_path=None):
+    """Create a SpeedView shortcut on the user's Desktop across Windows, Linux, and macOS."""
+    from speedview.utils.icon_utils import get_ico_path, get_png_icon_path
+
+    system = platform.system()
+    shortcut_path = get_desktop_shortcut_path()
+    os.makedirs(os.path.dirname(shortcut_path), exist_ok=True)
+
+    if target_path:
+        exe_path = os.path.abspath(target_path)
+        args = []
+        work_dir = os.path.dirname(exe_path)
+    else:
+        exe_path, args = _get_launch_command()
+        work_dir = os.path.dirname(args[0]) if args else os.path.dirname(exe_path)
+
+    if system == "Windows":
+        resolved_icon = icon_path or get_ico_path()
+        arg_str = f'"{args[0]}"' if args else ""
+        return _create_windows_lnk(
+            shortcut_path=shortcut_path,
+            target_exe=exe_path,
+            arguments=arg_str,
+            icon_path=resolved_icon,
+            working_dir=work_dir,
+        )
+
+    if system == "Darwin":
+        try:
+            cmd = f'"{exe_path}"' + (f' "{args[0]}"' if args else '')
+            with open(shortcut_path, "w", encoding="utf-8") as f:
+                f.write(f"#!/bin/sh\nnohup {cmd} >/dev/null 2>&1 &\n")
+            os.chmod(shortcut_path, 0o755)
+            return os.path.isfile(shortcut_path)
+        except OSError:
+            return False
+
+    try:
+        resolved_icon = icon_path or get_png_icon_path()
+        exec_cmd = f'"{exe_path}"' + (f' "{args[0]}"' if args else '')
+        content = (
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=SpeedView\n"
+            "Comment=Real-time Network Speed Meter\n"
+            f"Exec={exec_cmd}\n"
+            f"Icon={resolved_icon}\n"
+            "Terminal=false\n"
+            "Categories=Network;Utility;\n"
+        )
+        tmp = shortcut_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(tmp, shortcut_path)
+        os.chmod(shortcut_path, 0o755)
+        return os.path.isfile(shortcut_path)
+    except OSError:
+        return False
+
+
+def remove_desktop_shortcut():
+    """Remove the SpeedView desktop shortcut if it exists."""
+    shortcut_path = get_desktop_shortcut_path()
+    try:
+        if os.path.lexists(shortcut_path):
+            os.remove(shortcut_path)
+        return not os.path.lexists(shortcut_path)
+    except OSError:
+        return False
+
+
+def create_start_menu_shortcut(target_path=None, icon_path=None, uninstaller_path=None):
+    """Create Start Menu / Applications shortcut (plus optional Uninstall shortcut)."""
+    from speedview.utils.icon_utils import get_ico_path, get_png_icon_path
+
+    system = platform.system()
+    if target_path:
+        exe_path = os.path.abspath(target_path)
+        args = []
+        work_dir = os.path.dirname(exe_path)
+    else:
+        exe_path, args = _get_launch_command()
+        work_dir = os.path.dirname(args[0]) if args else os.path.dirname(exe_path)
+
+    if system == "Windows":
+        programs_dir = os.path.join(
+            os.getenv("APPDATA") or os.path.expanduser("~"),
+            "Microsoft", "Windows", "Start Menu", "Programs", "SpeedView",
+        )
+        os.makedirs(programs_dir, exist_ok=True)
+        resolved_icon = icon_path or get_ico_path()
+        ok = _create_windows_lnk(
+            shortcut_path=os.path.join(programs_dir, "SpeedView.lnk"),
+            target_exe=exe_path,
+            arguments=f'"{args[0]}"' if args else "",
+            icon_path=resolved_icon,
+            working_dir=work_dir,
+        )
+        if uninstaller_path:
+            _create_windows_lnk(
+                shortcut_path=os.path.join(programs_dir, "Uninstall SpeedView.lnk"),
+                target_exe=os.path.abspath(uninstaller_path),
+                arguments="--uninstall",
+                icon_path=resolved_icon,
+                working_dir=work_dir,
+                description="Uninstall SpeedView",
+            )
+        return ok
+
+    if system == "Linux":
+        apps_dir = os.path.join(
+            os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"),
+            "applications",
+        )
+        os.makedirs(apps_dir, exist_ok=True)
+        desktop_file = os.path.join(apps_dir, "speedview.desktop")
+        resolved_icon = icon_path or get_png_icon_path()
+        exec_cmd = f'"{exe_path}"' + (f' "{args[0]}"' if args else '')
+        content = (
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=SpeedView\n"
+            "Comment=Real-time Network Speed Meter\n"
+            f"Exec={exec_cmd}\n"
+            f"Icon={resolved_icon}\n"
+            "Terminal=false\n"
+            "Categories=Network;Utility;\n"
+        )
+        with open(desktop_file, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.chmod(desktop_file, 0o755)
+        return os.path.isfile(desktop_file)
+    return True
+
+
+def remove_start_menu_shortcut():
+    """Remove Start Menu / Applications shortcuts."""
+    import shutil
+    system = platform.system()
+    try:
+        if system == "Windows":
+            programs_dir = os.path.join(
+                os.getenv("APPDATA") or os.path.expanduser("~"),
+                "Microsoft", "Windows", "Start Menu", "Programs", "SpeedView",
+            )
+            if os.path.isdir(programs_dir):
+                shutil.rmtree(programs_dir, ignore_errors=True)
+        elif system == "Linux":
+            apps_dir = os.path.join(
+                os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"),
+                "applications",
+            )
+            desktop_file = os.path.join(apps_dir, "speedview.desktop")
+            if os.path.lexists(desktop_file):
+                os.remove(desktop_file)
+        return True
+    except OSError:
+        return False
 
 
 def apply_startup_setting(enable=True):
@@ -146,52 +359,51 @@ def set_autostart(enable=True):
     return apply_startup_setting(enable)
 
 
-def create_uninstall_reg_key():
-    """Create uninstall information in Windows registry"""
+def create_uninstall_reg_key(install_dir=None, uninstall_cmd=None, icon_path=None, version_str="1.0.0"):
+    """Create uninstall information in Windows registry (HKLM with HKCU fallback for non-admin)."""
     if not IS_WINDOWS or winreg is None:
         return False
-    try:
-        key = winreg.CreateKeyEx(
-            winreg.HKEY_LOCAL_MACHINE,
-            r'Software\Microsoft\Windows\CurrentVersion\Uninstall\NetworkSpeedMeter',
-        )
-
-        values = {
-            'DisplayName': 'Network Speed Meter',
-            'DisplayVersion': '1.0.0',
-            'Publisher': 'SpeedView',
-            'UninstallString': os.path.join(INSTALL_DIR, 'uninstall.exe'),
-            'DisplayIcon': os.path.join(INSTALL_DIR, 'NetworkSpeedMeter.exe'),
-            'InstallLocation': INSTALL_DIR,
-            'NoModify': 1,
-            'NoRepair': 1,
-        }
-
-        for name, value in values.items():
-            if isinstance(value, str):
-                winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
-            else:
-                winreg.SetValueEx(key, name, 0, winreg.REG_DWORD, value)
-
-        return True
-    except Exception as e:
-        print(f"Error creating uninstall key: {e}")
-        return False
+    target_dir = install_dir or INSTALL_DIR
+    uninstall_exe = uninstall_cmd or f'"{os.path.join(target_dir, "SpeedView-Setup.exe")}" --uninstall'
+    display_icon = icon_path or os.path.join(target_dir, "SpeedView.exe")
+    values = {
+        'DisplayName': 'SpeedView - Network Speed Meter',
+        'DisplayVersion': version_str,
+        'Publisher': 'SpeedView',
+        'UninstallString': uninstall_exe,
+        'DisplayIcon': display_icon,
+        'InstallLocation': target_dir,
+        'NoModify': 1,
+        'NoRepair': 1,
+    }
+    for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+        try:
+            key = winreg.CreateKeyEx(hive, UNINSTALL_REG_PATH, 0, winreg.KEY_SET_VALUE)
+            for name, value in values.items():
+                if isinstance(value, str):
+                    winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
+                else:
+                    winreg.SetValueEx(key, name, 0, winreg.REG_DWORD, value)
+            return True
+        except Exception:
+            continue
+    return False
 
 
 def remove_uninstall_reg_key():
-    """Remove uninstall information from Windows registry"""
+    """Remove uninstall information from Windows registry."""
     if not IS_WINDOWS or winreg is None:
         return False
-    try:
-        winreg.DeleteKey(
-            winreg.HKEY_LOCAL_MACHINE,
-            r'Software\Microsoft\Windows\CurrentVersion\Uninstall\NetworkSpeedMeter',
-        )
-        return True
-    except Exception as e:
-        print(f"Error removing uninstall key: {e}")
-        return False
+    removed = False
+    for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+        try:
+            winreg.DeleteKey(hive, UNINSTALL_REG_PATH)
+            removed = True
+        except FileNotFoundError:
+            pass
+        except Exception:
+            pass
+    return removed
 
 
 def check_single_instance():

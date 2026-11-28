@@ -556,6 +556,222 @@ class TestSettingsAndDetection(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
 
+    def test_app_icon_and_desktop_shortcut(self):
+        import speedview.config.windows as win_cfg
+        from speedview.utils.icon_utils import get_app_icon, get_ico_path, get_png_icon_path
+
+        self.assertTrue(os.path.isfile(get_ico_path()))
+        self.assertTrue(os.path.isfile(get_png_icon_path()))
+        icon = get_app_icon()
+        self.assertFalse(icon.isNull())
+
+        with tempfile.TemporaryDirectory() as fake_home:
+            with patch("os.path.expanduser", side_effect=lambda p: p.replace("~", fake_home)):
+                with patch("speedview.config.windows.platform.system", return_value="Linux"):
+                    self.assertTrue(win_cfg.create_desktop_shortcut())
+                    shortcut = win_cfg.get_desktop_shortcut_path()
+                    self.assertTrue(os.path.isfile(shortcut))
+                    with open(shortcut, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    self.assertIn("Name=SpeedView", content)
+                    self.assertTrue(win_cfg.remove_desktop_shortcut())
+                    self.assertFalse(os.path.exists(shortcut))
+
+                with patch("speedview.config.windows.platform.system", return_value="Windows"), \
+                     patch("speedview.config.windows._create_windows_lnk", return_value=True) as mock_lnk:
+                    self.assertTrue(win_cfg.create_desktop_shortcut(target_path=r"C:\Program Files\SpeedView\SpeedView.exe"))
+                    mock_lnk.assert_called_once()
+
+        settings = Settings()
+        dlg = SettingsDialog(settings=settings)
+        self.assertFalse(dlg.windowIcon().isNull())
+        self.assertTrue(hasattr(dlg, "desktop_shortcut_btn"))
+        dlg.close()
+        dlg.deleteLater()
+        self._app.processEvents()
+
+    def test_multi_version_changelogs_always_visible(self):
+        import json
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from speedview.ui.about_dialog import AboutDialog
+        from speedview.ui.update_dialog import UpdateDialog
+        from speedview.update.updater import UpdateChecker
+
+        settings = Settings()
+        about = AboutDialog(settings=settings)
+        about_text = about.changelog_view.toPlainText()
+        self.assertIn("v1.0.0", about_text)
+        self.assertIn("v0.9.0", about_text)
+        self.assertIn("v0.8.0", about_text)
+        self.assertFalse(about.windowIcon().isNull())
+        about.close()
+        about.deleteLater()
+
+        # Even when UpdateDialog sees no newer release, full multi-version changelog must stay visible
+        upd = UpdateDialog(settings=settings, force_check=True, auto_check=False)
+        with patch.object(upd.updater, "check_for_updates", return_value=False):
+            upd.check_for_updates()
+        self.assertFalse(upd.changelog_view.isHidden())
+        self.assertFalse(upd.changelog_heading.isHidden())
+        upd_text = upd.changelog_view.toPlainText()
+        self.assertIn("v1.0.0", upd_text)
+        self.assertIn("v0.9.0", upd_text)
+        self.assertIn("v0.8.0", upd_text)
+        upd.close()
+        upd.deleteLater()
+
+        # Verify remote /releases caching persists new release changelogs cleanly across sessions
+        class MultiReleaseHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path.startswith("/repos/test/releases"):
+                    body = json.dumps([
+                        {
+                            "tag_name": "v1.2.0",
+                            "name": "v1.2.0 - Installer Edition",
+                            "published_at": "2026-12-01T10:00:00Z",
+                            "body": "### Features\n- Live speed overlay\n### Changelog\n- MSI upgrade polish",
+                            "html_url": "https://example/v1.2.0",
+                            "assets": [],
+                        },
+                        {
+                            "tag_name": "v1.1.0",
+                            "name": "v1.1.0 - Caching Release",
+                            "published_at": "2026-11-29T10:00:00Z",
+                            "body": "- Cached release notes test",
+                            "html_url": "https://example/v1.1.0",
+                            "assets": [],
+                        },
+                    ]).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, format, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), MultiReleaseHandler)
+        port = server.server_address[1]
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                cache_path = os.path.join(tmpdir, "releases_cache.json")
+                settings.update_url = f"http://127.0.0.1:{port}/repos/test/releases/latest"
+                checker = UpdateChecker(settings=settings, releases_cache_file=cache_path)
+                releases = checker.fetch_all_releases(force=True)
+                versions = [r["version"] for r in releases]
+                self.assertIn("1.2.0", versions)
+                self.assertIn("1.1.0", versions)
+                self.assertIn("1.0.0", versions)
+                self.assertIn("0.9.0", versions)
+                self.assertIn("0.8.0", versions)
+
+                offline_checker = UpdateChecker(settings=settings, releases_cache_file=cache_path)
+                md = offline_checker.get_all_changelogs_markdown()
+                self.assertIn("1.2.0", md)
+                self.assertIn("1.1.0", md)
+                self.assertIn("1.0.0", md)
+                self.assertIn("0.8.0", md)
+        finally:
+            server.shutdown()
+            server.server_close()
+        self._app.processEvents()
+
+    def test_onedir_zip_update_replaces_exe_and_internal_libs(self):
+        import zipfile
+        from speedview.update.updater import UpdateChecker
+
+        with tempfile.TemporaryDirectory() as workdir:
+            zip_path = os.path.join(workdir, "SpeedView-windows-x64.zip")
+            with zipfile.ZipFile(zip_path, "w") as zf:
+                zf.writestr("SpeedView/SpeedView.exe", b"EXE_V2")
+                zf.writestr("SpeedView/_internal/qt_core.dll", b"DLL_V2")
+
+            program_files_dir = os.path.join(workdir, "Program Files", "SpeedView")
+            os.makedirs(os.path.join(program_files_dir, "_internal"), exist_ok=True)
+            with open(os.path.join(program_files_dir, "SpeedView.exe"), "wb") as f:
+                f.write(b"EXE_V1")
+            with open(os.path.join(program_files_dir, "_internal", "qt_core.dll"), "wb") as f:
+                f.write(b"DLL_V1")
+
+            checker = UpdateChecker()
+            staged_zip = os.path.join(workdir, "staged", "SpeedView-windows-x64.zip")
+            os.makedirs(os.path.dirname(staged_zip), exist_ok=True)
+            import shutil
+            shutil.copy2(zip_path, staged_zip)
+
+            self.assertTrue(
+                checker.install_update(
+                    staged_zip,
+                    target_path=os.path.join(program_files_dir, "SpeedView.exe"),
+                    restart=False,
+                    launch_script=True,
+                    wait_pid=0,
+                )
+            )
+            if checker.last_helper_process is not None:
+                checker.last_helper_process.wait(timeout=5)
+
+            with open(os.path.join(program_files_dir, "SpeedView.exe"), "rb") as f:
+                self.assertEqual(f.read(), b"EXE_V2")
+            with open(os.path.join(program_files_dir, "_internal", "qt_core.dll"), "rb") as f:
+                self.assertEqual(f.read(), b"DLL_V2")
+
+    def test_gui_installer_and_uninstaller_flow(self):
+        from speedview.installer.gui_installer import InstallerCore, InstallerWindow
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            payload_dir = os.path.join(tmpdir, "payload")
+            os.makedirs(os.path.join(payload_dir, "_internal"), exist_ok=True)
+            with open(os.path.join(payload_dir, "SpeedView"), "wb") as f:
+                f.write(b"#!/bin/sh\necho SpeedView\n")
+            with open(os.path.join(payload_dir, "_internal", "runtime.dat"), "wb") as f:
+                f.write(b"RUNTIME_DATA")
+
+            install_dir = os.path.join(tmpdir, "ProgramFiles", "SpeedView")
+            fake_home = os.path.join(tmpdir, "home")
+            old_xdg_data = os.environ.get("XDG_DATA_HOME")
+            os.environ["XDG_DATA_HOME"] = os.path.join(fake_home, ".local", "share")
+            try:
+                with patch("os.path.expanduser", side_effect=lambda p: p.replace("~", fake_home)), \
+                     patch("speedview.config.windows.platform.system", return_value="Linux"), \
+                     patch("speedview.installer.gui_installer.platform.system", return_value="Linux"):
+                    core = InstallerCore(payload_dir=payload_dir)
+                    res = core.install(
+                        install_dir=install_dir,
+                        desktop_shortcut=True,
+                        start_menu_shortcut=True,
+                        start_on_startup=False,
+                        stop_running=False,
+                    )
+                    self.assertTrue(os.path.isfile(res["executable"]))
+                    self.assertTrue(os.path.isfile(os.path.join(install_dir, "_internal", "runtime.dat")))
+                    self.assertTrue(core.is_installed(install_dir))
+                    self.assertTrue(os.path.isfile(os.path.join(fake_home, "Desktop", "speedview.desktop")))
+                    self.assertTrue(os.path.isfile(os.path.join(fake_home, ".local", "share", "applications", "speedview.desktop")))
+
+                    self.assertTrue(core.uninstall(install_dir=install_dir, stop_running=False))
+                    self.assertFalse(os.path.exists(install_dir))
+                    self.assertFalse(os.path.exists(os.path.join(fake_home, "Desktop", "speedview.desktop")))
+                    self.assertFalse(os.path.exists(os.path.join(fake_home, ".local", "share", "applications", "speedview.desktop")))
+            finally:
+                if old_xdg_data is None:
+                    os.environ.pop("XDG_DATA_HOME", None)
+                else:
+                    os.environ["XDG_DATA_HOME"] = old_xdg_data
+
+            wiz = InstallerWindow(default_dir=install_dir)
+            self.assertFalse(wiz.windowIcon().isNull())
+            self.assertEqual(wiz.path_input.text(), install_dir)
+            wiz.close()
+            wiz.deleteLater()
+            self._app.processEvents()
+
 
 if __name__ == '__main__':
     unittest.main()

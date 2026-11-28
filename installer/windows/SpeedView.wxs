@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="SpeedView - Network Speed Meter"
+           Manufacturer="SpeedView"
+           Version="$(var.AppVersion)"
+           UpgradeCode="7E19C4A1-8E65-4D1B-A2E7-5F9E0A44B210"
+           Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of SpeedView is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="SpeedViewIcon.ico" SourceFile="..\..\speedview\ui\resources\speedview.ico" />
+    <Property Id="ARPPRODUCTICON" Value="SpeedViewIcon.ico" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <ui:WixUI Id="WixUI_InstallDir" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="SpeedView" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="SpeedView" />
+    </StandardDirectory>
+
+    <Feature Id="ProductFeature" Title="SpeedView" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="ShortcutComponents" />
+    </Feature>
+
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Files Include="..\..\dist\SpeedView\**" />
+    </ComponentGroup>
+
+    <Component Id="ShortcutComponents"
+               Directory="INSTALLFOLDER"
+               Guid="C8A3F210-39D4-47B5-9C6E-2214E8A01105">
+      <Shortcut Id="DesktopShortcut"
+                Directory="DesktopFolder"
+                Name="SpeedView"
+                Description="Launch SpeedView Network Speed Meter"
+                Target="[INSTALLFOLDER]SpeedView.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="SpeedViewIcon.ico" />
+      <Shortcut Id="StartMenuShortcut"
+                Directory="ApplicationProgramsFolder"
+                Name="SpeedView"
+                Description="Launch SpeedView Network Speed Meter"
+                Target="[INSTALLFOLDER]SpeedView.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="SpeedViewIcon.ico" />
+      <Shortcut Id="UninstallProductShortcut"
+                Directory="ApplicationProgramsFolder"
+                Name="Uninstall SpeedView"
+                Description="Uninstall SpeedView"
+                Target="[System64Folder]msiexec.exe"
+                Arguments="/x [ProductCode]" />
+      <RemoveFolder Id="RemoveProgramsDir" Directory="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU"
+                     Key="Software\SpeedView\Installer"
+                     Name="installed"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+    </Component>
+
+  </Package>
+</Wix>

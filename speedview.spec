@@ -16,11 +16,25 @@ if sys.platform == "win32":
         "winshell",
     ]
 
+datas = [
+    ("speedview/ui/resources/speedview.png", "speedview/ui/resources"),
+    ("speedview/ui/resources/speedview.ico", "speedview/ui/resources"),
+    ("speedview/ui/resources/speedview_icon.svg", "speedview/ui/resources"),
+    ("CHANGELOG.md", "."),
+]
+
+if sys.platform == "win32" and os.path.exists("speedview/ui/resources/speedview.ico"):
+    app_icon = "speedview/ui/resources/speedview.ico"
+elif os.path.exists("speedview/ui/resources/speedview.png"):
+    app_icon = "speedview/ui/resources/speedview.png"
+else:
+    app_icon = None
+
 a = Analysis(
     ["main.py"],
     pathex=[os.path.abspath(".")],
     binaries=[],
-    datas=[],
+    datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
@@ -51,6 +65,7 @@ if sys.platform == "darwin":
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
+        icon=app_icon,
     )
     coll = COLLECT(
         exe,
@@ -65,28 +80,36 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name="SpeedView.app",
-        icon=None,
+        icon=app_icon,
         bundle_identifier="com.speedview.app",
     )
 else:
+    # Program Files / extracted onedir layout for clean upgrades and auto-updating
     exe = EXE(
         pyz,
         a.scripts,
-        a.binaries,
-        a.zipfiles,
-        a.datas,
         [],
+        exclude_binaries=True,
         name="SpeedView",
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
         upx=True,
-        upx_exclude=[],
-        runtime_tmpdir=None,
         console=False,
         disable_windowed_traceback=False,
         argv_emulation=False,
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
+        icon=app_icon,
+    )
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.zipfiles,
+        a.datas,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        name="SpeedView",
     )

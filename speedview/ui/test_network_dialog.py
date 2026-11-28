@@ -4,6 +4,7 @@ from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtCore import Qt, QByteArray, pyqtSignal
 from PyQt5.QtGui import QKeySequence
 from speedview.utils.svg_utils import apply_rounded_mask, update_test_network_svg
+from speedview.utils.icon_utils import get_app_icon
 from speedview.ui.resources.svg_templates import TEST_NETWORK_SVG
 
 
@@ -31,6 +32,7 @@ class TestNetworkDialog(QWidget):
     def setup_ui(self):
         """Initialize UI components"""
         self.setWindowTitle("Network Test")
+        self.setWindowIcon(get_app_icon())
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")
