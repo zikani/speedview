@@ -255,7 +255,9 @@ class TestSettingsAndDetection(unittest.TestCase):
         mw.force_quit()
 
     def test_start_on_startup_registration(self):
-        from speedview.config.windows import apply_startup_setting
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+        import speedview.config.windows as win_cfg
 
         with tempfile.TemporaryDirectory() as tmpdir:
             old_xdg = os.environ.get("XDG_CONFIG_HOME")
@@ -263,11 +265,27 @@ class TestSettingsAndDetection(unittest.TestCase):
             try:
                 # Verify Linux/XDG behavior regardless of the CI runner OS.
                 with patch("speedview.config.windows.platform.system", return_value="Linux"):
-                    self.assertTrue(apply_startup_setting(True))
+                    self.assertTrue(win_cfg.apply_startup_setting(True))
                     desktop_path = os.path.join(tmpdir, "autostart", "speedview.desktop")
                     self.assertTrue(os.path.exists(desktop_path))
-                    self.assertTrue(apply_startup_setting(False))
+                    self.assertTrue(win_cfg.apply_startup_setting(False))
                     self.assertFalse(os.path.exists(desktop_path))
+
+                # Verify Windows Registry branch cleanly without modifying host registry.
+                fake_winreg = SimpleNamespace(
+                    HKEY_CURRENT_USER="HKCU",
+                    KEY_SET_VALUE=2,
+                    REG_SZ=1,
+                    CreateKeyEx=MagicMock(return_value="key_handle"),
+                    SetValueEx=MagicMock(),
+                    DeleteValue=MagicMock(),
+                )
+                with patch("speedview.config.windows.platform.system", return_value="Windows"), \
+                     patch.object(win_cfg, "winreg", fake_winreg):
+                    self.assertTrue(win_cfg.apply_startup_setting(True))
+                    fake_winreg.SetValueEx.assert_called_once()
+                    self.assertTrue(win_cfg.apply_startup_setting(False))
+                    fake_winreg.DeleteValue.assert_called_once()
             finally:
                 if old_xdg is None:
                     os.environ.pop("XDG_CONFIG_HOME", None)
