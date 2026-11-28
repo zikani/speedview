@@ -4,6 +4,19 @@ All notable releases, features, and improvements for SpeedView.
 
 ---
 
+## v1.0.9 — Inno Setup Installer, Setup Wizard & Live GitHub Version Sync
+### Features
+- Inno Setup 6 Windows Installer (`SpeedView-Installer-x64.exe`) installing to `Program Files\SpeedView`
+- PyQt5 GUI Setup & Uninstaller (`SpeedView-Setup.exe` / `SpeedView-linux-x64-Setup`) with Desktop & Start Menu shortcuts
+- Live GitHub Releases sync in the About and Updater dialogs with full multi-version changelogs
+
+### Changelog
+- Synced application version and About widget release status directly with GitHub Releases (`v1.0.9`)
+- Replaced deprecated WiX configuration with Inno Setup 6 (`installer/windows/speedview.iss`)
+- Fixed macOS `.icns` icon packaging and cross-platform startup registration checks
+
+---
+
 ## v1.0.0 — Cross-Platform Auto-Updater, GUI Installer & Live Ping
 ### Features
 - Real-time Ping / Latency badge (`#pingBadge`) next to the main speedometer gauge

@@ -2,6 +2,8 @@ import os
 import platform
 import sys
 
+from speedview.config.config import APP_VERSION
+
 IS_WINDOWS = platform.system() == "Windows"
 
 if IS_WINDOWS:
@@ -359,7 +361,7 @@ def set_autostart(enable=True):
     return apply_startup_setting(enable)
 
 
-def create_uninstall_reg_key(install_dir=None, uninstall_cmd=None, icon_path=None, version_str="1.0.0"):
+def create_uninstall_reg_key(install_dir=None, uninstall_cmd=None, icon_path=None, version_str=APP_VERSION):
     """Create uninstall information in Windows registry (HKLM with HKCU fallback for non-admin)."""
     if not IS_WINDOWS or winreg is None:
         return False

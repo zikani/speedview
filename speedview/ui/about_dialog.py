@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QTextEdit,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 from speedview.config.config import (
     APP_FEATURES,
@@ -16,7 +16,7 @@ from speedview.config.config import (
     DEFAULT_RELEASES_PAGE_URL,
 )
 from speedview.ui.update_dialog import UpdateDialog
-from speedview.update.updater import UpdateChecker
+from speedview.update.updater import UpdateChecker, _safe_parse_version
 from speedview.utils.icon_utils import get_app_icon
 
 
@@ -83,13 +83,31 @@ QPushButton#primaryBtn:hover {
 """
 
 
+class _ReleaseSyncWorker(QThread):
+    synced = pyqtSignal(list)
+
+    def __init__(self, updater, force=True, parent=None):
+        super().__init__(parent)
+        self.updater = updater
+        self.force = force
+
+    def run(self):
+        try:
+            releases = self.updater.fetch_all_releases(force=self.force)
+            self.synced.emit(releases or [])
+        except Exception:
+            self.synced.emit([])
+
+
 class AboutDialog(QDialog):
-    """About dialog displaying SpeedView's current features and full release changelog history."""
+    """About dialog displaying SpeedView's version synced with GitHub Releases, features, and changelog history."""
 
     def __init__(self, parent=None, settings=None):
         super().__init__(parent)
         self.settings = settings
         self.updater = UpdateChecker(settings=self.settings)
+        self._sync_worker = None
+        self._did_auto_sync = False
         self.init_ui()
 
     def init_ui(self):
@@ -156,9 +174,9 @@ class AboutDialog(QDialog):
         releases_btn.clicked.connect(lambda: webbrowser.open(DEFAULT_RELEASES_PAGE_URL))
         footer.addWidget(releases_btn)
 
-        refresh_btn = QPushButton("Refresh Releases")
-        refresh_btn.clicked.connect(lambda: self._load_changelog_history(force_remote=True))
-        footer.addWidget(refresh_btn)
+        self.refresh_btn = QPushButton("Refresh Releases")
+        self.refresh_btn.clicked.connect(lambda: self.sync_github_releases(force=True))
+        footer.addWidget(self.refresh_btn)
 
         updates_btn = QPushButton("Check for Updates")
         updates_btn.clicked.connect(self.open_updater)
@@ -173,14 +191,79 @@ class AboutDialog(QDialog):
 
         layout.addLayout(footer)
 
-    def _load_changelog_history(self, force_remote=False):
-        if force_remote:
-            self.updater.fetch_all_releases(force=True)
-        markdown_text = self.updater.get_all_changelogs_markdown(include_builtin=True)
+    def _update_version_banner(self, releases=None):
+        records = releases if releases is not None else self.updater._merge_releases(include_builtin=True)
+        latest_ver = None
+        for entry in records or []:
+            ver = str(entry.get("version") or "").lstrip("v").strip()
+            if ver:
+                latest_ver = ver
+                break
+
+        if not latest_ver:
+            self.setWindowTitle(f"About SpeedView v{APP_VERSION}")
+            self.version_label.setText(
+                f"Version v{APP_VERSION}  •  Cross-Platform PyQt5 & SVG  •  MIT License"
+            )
+            return
+
+        if _safe_parse_version(latest_ver) > _safe_parse_version(APP_VERSION):
+            self.setWindowTitle(f"About SpeedView v{APP_VERSION} (Latest GitHub: v{latest_ver})")
+            self.version_label.setText(
+                f"Version v{APP_VERSION}  •  Latest GitHub Release: v{latest_ver}  •  MIT License"
+            )
+        else:
+            self.setWindowTitle(f"About SpeedView v{APP_VERSION}")
+            self.version_label.setText(
+                f"Version v{APP_VERSION} (Latest GitHub: v{latest_ver})  •  Cross-Platform PyQt5 & SVG  •  MIT License"
+            )
+
+    def _apply_releases(self, releases=None):
+        self._update_version_banner(releases)
+        markdown_text = self.updater.get_all_changelogs_markdown(
+            include_builtin=True,
+            releases=releases,
+        )
         if hasattr(self.changelog_view, "setMarkdown"):
             self.changelog_view.setMarkdown(markdown_text)
         else:
             self.changelog_view.setPlainText(markdown_text)
+
+    def _load_changelog_history(self, force_remote=False):
+        releases = None
+        if force_remote:
+            releases = self.updater.fetch_all_releases(force=True)
+        else:
+            cached = self.updater._load_cached_releases()
+            releases = self.updater._merge_releases(cached, include_builtin=True)
+        self._apply_releases(releases)
+
+    def sync_github_releases(self, force=True):
+        if self._sync_worker is not None and self._sync_worker.isRunning():
+            return
+        if hasattr(self, "refresh_btn"):
+            self.refresh_btn.setEnabled(False)
+        worker = _ReleaseSyncWorker(self.updater, force=force, parent=self)
+        worker.synced.connect(self._on_releases_synced)
+        self._sync_worker = worker
+        worker.start()
+
+    def _on_releases_synced(self, releases):
+        if hasattr(self, "refresh_btn"):
+            self.refresh_btn.setEnabled(True)
+        if releases:
+            self._apply_releases(releases)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._did_auto_sync:
+            self._did_auto_sync = True
+            self.sync_github_releases(force=True)
+
+    def closeEvent(self, event):
+        if self._sync_worker is not None and self._sync_worker.isRunning():
+            self._sync_worker.wait(1500)
+        super().closeEvent(event)
 
     def open_updater(self):
         dialog = UpdateDialog(parent=self, settings=self.settings, force_check=True)

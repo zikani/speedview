@@ -3,7 +3,7 @@ import os
 
 
 APP_NAME = "Network Speed Meter"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.9"
 
 APP_FEATURES = [
     "Frameless translucent SVG speedometer with Download/Upload scale and gear Settings button",
@@ -17,26 +17,64 @@ APP_FEATURES = [
 ]
 
 CURRENT_CHANGELOG = [
-    "Added Program Files onedir packaging, Inno Setup Windows Installer/Uninstaller & PyQt5 Setup Wizard, main app icon, and Desktop shortcut creation",
+    "Synced application version and About widget release badge directly with GitHub Releases (v1.0.9)",
+    "Added Program Files onedir packaging, Inno Setup 6 Windows Installer/Uninstaller (SpeedView-Installer-x64.exe) & PyQt5 Setup Wizard",
+    "Bundled application icon across all dialogs, Windows installer, and Desktop/Start Menu shortcuts",
     "Added 3-day GitHub Releases background auto-updater with temp .zip staging and Python subprocess swap-and-restart",
     "Updated About and Updater widgets to display all released version changelogs and features",
     "Added real-time TCP Ping / Latency indicator (#pingBadge) next to the speed gauge",
-    "Rescaled compact transparent corner Float widget (signal + speed only), added gear icon Settings trigger, and redesigned Settings dark theme",
-    "Unified close-to-Float and minimize-to-tray background lifecycle plus OS Start on Startup registration",
 ]
 
 RELEASE_HISTORY = [
     {
-        "version": "1.0.0",
+        "version": "1.0.9",
         "date": "2026-11-28",
+        "title": "Inno Setup Installer, Setup Wizard & Live GitHub Version Sync",
+        "features": [
+            "Inno Setup 6 Windows Installer (SpeedView-Installer-x64.exe) installing to Program Files\\SpeedView",
+            "PyQt5 GUI Setup/Uninstaller (SpeedView-Setup.exe / SpeedView-linux-x64-Setup) with Desktop shortcut creation",
+            "Live GitHub Releases sync in About and Updater widgets with full multi-version changelogs",
+        ],
+        "changes": list(CURRENT_CHANGELOG),
+    },
+    {
+        "version": "1.0.7",
+        "date": "2026-11-28",
+        "title": "Cross-Platform Packaging & macOS App Bundle Fixes",
+        "features": [
+            "Native macOS .icns app icon generation and onedir cross-platform release archives",
+        ],
+        "changes": [
+            "Fixed macOS PyInstaller icon format handling by bundling speedview.icns and Pillow",
+            "Switched Windows/Linux release builds to onedir .zip packages for in-place updates",
+        ],
+    },
+    {
+        "version": "1.0.6",
+        "date": "2026-11-28",
+        "title": "Cross-Platform Startup Registration",
+        "features": [
+            "Consistent XDG autostart, macOS LaunchAgents, and Windows Run registry startup management",
+        ],
+        "changes": [
+            "Fixed cross-platform startup registration verification across Linux, macOS, and Windows",
+        ],
+    },
+    {
+        "version": "1.0.0",
+        "date": "2025-04-24",
         "title": "Cross-Platform Auto-Updater, GUI Installer & Live Ping",
         "features": [
             "Real-time Ping / Latency badge next to the main speedometer gauge",
             "Transparent compact corner Float widget (136x40) with live signal bars and speed",
-            "Bundled app icon (ICO/PNG/SVG/ICNS), Desktop shortcut creator, Inno Setup Installer & GUI Setup/Uninstaller wizard",
+            "Bundled app icon (ICO/PNG/SVG/ICNS), Desktop shortcut creator & GUI Setup wizard",
             "3-day rate-limited GitHub Releases background auto-updater with Python subprocess file replacement & restart",
         ],
-        "changes": list(CURRENT_CHANGELOG),
+        "changes": [
+            "Added real-time TCP Ping / Latency indicator (#pingBadge) next to the speed gauge",
+            "Rescaled compact transparent corner Float widget (signal + speed only), added gear icon Settings trigger, and redesigned Settings dark theme",
+            "Unified close-to-Float and minimize-to-tray background lifecycle plus OS Start on Startup registration",
+        ],
     },
     {
         "version": "0.9.0",

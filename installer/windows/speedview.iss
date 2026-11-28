@@ -2,7 +2,7 @@
 ; Builds dist\SpeedView-Installer-x64.exe installing extracted onedir bundle to Program Files\SpeedView
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.9"
 #endif
 
 [Setup]

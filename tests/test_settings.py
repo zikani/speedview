@@ -437,13 +437,26 @@ class TestSettingsAndDetection(unittest.TestCase):
 
         settings = Settings()
         about = AboutDialog(settings=settings)
+        self.assertEqual(APP_VERSION, "1.0.9")
         self.assertIn(APP_VERSION, about.version_label.text())
+        self.assertIn("Latest GitHub", about.version_label.text())
         features_txt = about.features_view.toPlainText()
         changelog_txt = about.changelog_view.toPlainText()
         for feat in APP_FEATURES:
             self.assertIn(feat, features_txt)
         for entry in CURRENT_CHANGELOG:
             self.assertIn(entry, changelog_txt)
+        about._apply_releases([
+            {
+                "version": "1.2.0",
+                "date": "2026-12-01",
+                "title": "Next Release",
+                "features": ["Live GitHub Sync"],
+                "changes": ["Updated About banner"],
+            }
+        ])
+        self.assertIn("Latest GitHub Release: v1.2.0", about.version_label.text())
+        self.assertIn("Live GitHub Sync", about.changelog_view.toPlainText())
         about.close()
         about.deleteLater()
 
