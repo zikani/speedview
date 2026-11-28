@@ -1,5 +1,5 @@
-import platform
 from PyQt5.QtWidgets import (
+    QApplication,
     QDialog,
     QVBoxLayout,
     QProgressBar,
@@ -34,15 +34,17 @@ class UpdateWorker(QThread):
 
 
 class UpdateDialog(QDialog):
-    def __init__(self, parent=None, settings=None):
+    def __init__(self, parent=None, settings=None, force_check=True):
         super().__init__(parent)
+        self.settings = settings
+        self.force_check = force_check
         self.updater = UpdateChecker(settings=settings)
         self.init_ui()
         self.check_for_updates()
 
     def init_ui(self):
         self.setWindowTitle("Software Update")
-        self.setFixedSize(420, 180)
+        self.setFixedSize(440, 210)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
         self.setAutoFillBackground(True)
@@ -67,8 +69,7 @@ class UpdateDialog(QDialog):
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
 
-        action_label = "Update Now" if platform.system() == "Windows" else "Open Release Page"
-        self.update_button = QPushButton(action_label)
+        self.update_button = QPushButton("Download & Install")
         self.update_button.clicked.connect(self.start_update)
         self.update_button.hide()
         layout.addWidget(self.update_button)
@@ -76,7 +77,11 @@ class UpdateDialog(QDialog):
         self.setLayout(layout)
 
     def check_for_updates(self):
-        if self.updater.check_for_updates():
+        if self.updater.check_for_updates(force=self.force_check):
+            has_direct_asset = bool(
+                self.updater.download_url and self.updater.download_url != self.updater.release_page_url
+            )
+            self.update_button.setText("Download & Install" if has_direct_asset else "Open Release Page")
             self.status_label.setText(
                 f"New version {self.updater.latest_version} is available!\n"
                 f"Current version: {self.updater.current_version}\n\n"
@@ -88,14 +93,14 @@ class UpdateDialog(QDialog):
             self.close()
 
     def start_update(self):
-        if platform.system() != "Windows":
+        if not self.updater.download_url or self.updater.download_url == self.updater.release_page_url:
             self.updater.open_release_page()
             self.accept()
             return
 
         self.update_button.setEnabled(False)
         self.progress_bar.show()
-        self.status_label.setText("Downloading update...")
+        self.status_label.setText("Downloading update package to temporary folder...")
 
         self.worker = UpdateWorker(self.updater)
         self.worker.progress.connect(self.update_progress)
@@ -110,16 +115,32 @@ class UpdateDialog(QDialog):
         reply = QMessageBox.question(
             self,
             'Install Update',
-            'The update has been downloaded. Install now?\n'
-            'The application will restart automatically.',
+            'The update package has been downloaded to a temporary folder.\n'
+            'Install now? SpeedView will close, update its files, and restart automatically.',
             QMessageBox.Yes | QMessageBox.No,
         )
 
         if reply == QMessageBox.Yes:
-            if self.updater.install_update(update_file):
-                self.accept()
+            if self.updater.can_self_replace():
+                if self.updater.install_update(update_file, restart=True):
+                    self.accept()
+                    parent = self.parent()
+                    if parent is not None and hasattr(parent, 'force_quit'):
+                        parent.force_quit()
+                    else:
+                        app = QApplication.instance()
+                        if app is not None:
+                            app.quit()
+                else:
+                    self.show_error("Failed to launch update helper script")
             else:
-                self.show_error("Failed to install update")
+                QMessageBox.information(
+                    self,
+                    "Update Downloaded",
+                    f"Update archive downloaded and staged at:\n{self.updater.staged_dir or update_file}\n\n"
+                    "Self-replacement activates automatically in packaged standalone builds.",
+                )
+                self.accept()
 
     def show_error(self, error_message):
         QMessageBox.critical(self, "Update Error", error_message)

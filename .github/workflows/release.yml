@@ -71,7 +71,8 @@ jobs:
             main.py
           chmod +x dist/SpeedView-linux-x64
           tar -C dist -czf dist/SpeedView-linux-x64.tar.gz SpeedView-linux-x64
-          (cd dist && sha256sum SpeedView-linux-x64 SpeedView-linux-x64.tar.gz > SpeedView-linux-x64.sha256)
+          (cd dist && python -m zipfile -c SpeedView-linux-x64.zip SpeedView-linux-x64)
+          (cd dist && sha256sum SpeedView-linux-x64 SpeedView-linux-x64.tar.gz SpeedView-linux-x64.zip > SpeedView-linux-x64.sha256)
 
       - name: Upload Linux release artifacts
         uses: actions/upload-artifact@v4
@@ -80,6 +81,7 @@ jobs:
           path: |
             dist/SpeedView-linux-x64
             dist/SpeedView-linux-x64.tar.gz
+            dist/SpeedView-linux-x64.zip
             dist/SpeedView-linux-x64.sha256
 
   build-windows:
@@ -105,7 +107,7 @@ jobs:
           python -m compileall -q main.py speedview tests
           python -m unittest discover -s tests -v
 
-      - name: Build standalone Windows .exe with PyInstaller
+      - name: Build standalone Windows .exe & .zip with PyInstaller
         shell: pwsh
         run: |
           pyinstaller `
@@ -120,8 +122,13 @@ jobs:
             --hidden-import win32com.client `
             --hidden-import winshell `
             main.py
-          $hash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-windows-x64.exe).Hash.ToLower()
-          "$hash  SpeedView-windows-x64.exe" | Out-File -Encoding ascii dist\SpeedView-windows-x64.exe.sha256
+          Compress-Archive -Path dist\SpeedView-windows-x64.exe -DestinationPath dist\SpeedView-windows-x64.zip -Force
+          $exeHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-windows-x64.exe).Hash.ToLower()
+          $zipHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-windows-x64.zip).Hash.ToLower()
+          @(
+            "$exeHash  SpeedView-windows-x64.exe"
+            "$zipHash  SpeedView-windows-x64.zip"
+          ) | Out-File -Encoding ascii dist\SpeedView-windows-x64.sha256
 
       - name: Upload Windows release artifacts
         uses: actions/upload-artifact@v4
@@ -129,11 +136,59 @@ jobs:
           name: speedview-windows-x64
           path: |
             dist/SpeedView-windows-x64.exe
-            dist/SpeedView-windows-x64.exe.sha256
+            dist/SpeedView-windows-x64.zip
+            dist/SpeedView-windows-x64.sha256
+
+  build-macos:
+    name: Build macOS App Bundle (PyInstaller)
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies and PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify bytecode & run unit tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -m compileall -q main.py speedview tests
+          python -m unittest discover -s tests -v
+
+      - name: Build standalone macOS .app.zip with PyInstaller
+        run: |
+          pyinstaller \
+            --noconfirm \
+            --clean \
+            --windowed \
+            --name SpeedView \
+            --collect-submodules speedview \
+            --hidden-import PyQt5.QtSvg \
+            --hidden-import PyQt5.QtXml \
+            main.py
+          ditto -c -k --keepParent dist/SpeedView.app dist/SpeedView-macos.zip
+          (cd dist && shasum -a 256 SpeedView-macos.zip > SpeedView-macos.zip.sha256)
+
+      - name: Upload macOS release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: speedview-macos
+          path: |
+            dist/SpeedView-macos.zip
+            dist/SpeedView-macos.zip.sha256
 
   release:
     name: Publish GitHub Release
-    needs: [build-linux, build-windows]
+    needs: [build-linux, build-windows, build-macos]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -154,7 +209,11 @@ jobs:
           prerelease: false
           files: |
             release-assets/SpeedView-windows-x64.exe
-            release-assets/SpeedView-windows-x64.exe.sha256
+            release-assets/SpeedView-windows-x64.zip
+            release-assets/SpeedView-windows-x64.sha256
             release-assets/SpeedView-linux-x64
             release-assets/SpeedView-linux-x64.tar.gz
+            release-assets/SpeedView-linux-x64.zip
             release-assets/SpeedView-linux-x64.sha256
+            release-assets/SpeedView-macos.zip
+            release-assets/SpeedView-macos.zip.sha256

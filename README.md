@@ -37,7 +37,8 @@
 | **Real Interface Detection** | Automatically detects active **Ethernet**, **Wi-Fi** (real SSID, `2.4GHz` / `5GHz` / `6GHz` band, signal percentage), **Virtual**, or **Loopback** adapters with link speed and IPv4/IPv6 addresses across Linux, Windows, and macOS. |
 | **Live File Speed Testing** | Real-time streaming download and chunked upload throughput test (`NetworkController.measure_file_speed`) against public CDN endpoints with `speedtest-cli` and `fast-cli` fallbacks. |
 | **SQLite Data Usage (`App \| Data \| Date`)** | Per-process socket traffic attribution persisted in `data_usage.db`, presented in a frameless SVG window with `DAILY` / `MONTHLY` breakdowns and `RESET`. |
-| **Modern Settings & Autostart** | High-contrast dark-navy Settings dialog with interface selector (`Auto-select` or manual), **Start SpeedView automatically on system startup** (Windows Registry / Linux XDG `.desktop` / macOS LaunchAgent), units (`Mbps`, `MB/s`, `Kbps`), alerts, and in-app updater. |
+| **Modern Settings & Autostart** | High-contrast dark-navy Settings dialog with interface selector (`Auto-select` or manual), **Start SpeedView automatically on system startup** (Windows Registry / Linux XDG `.desktop` / macOS LaunchAgent), units (`Mbps`, `MB/s`, `Kbps`), alerts, and update controls. |
+| **Background GitHub Auto-Updater** | Checks GitHub Releases **once every 3 days** (avoiding API rate limits), downloads OS-matching `.zip` updates into a temp folder in the background, and launches a detached helper script that waits for exit, swaps files cleanly, and restarts. |
 | **System Tray Background Daemon** | Keeps tracking speed and app data usage continuously in the background with a dynamic speed badge icon, synced tooltip, quick menu actions, and threshold alerts. |
 
 ---
@@ -84,9 +85,10 @@ sudo apt-get update && sudo apt-get install -y --no-install-recommends \
 ## Installation
 
 ### 1. Run Prebuilt Release Binaries (Recommended for End Users)
-Download the latest standalone binary from the [**GitHub Releases**](https://github.com/zikani/speedview/releases) page:
-- **Windows**: `SpeedView-windows-x64.exe`
-- **Linux**: `SpeedView-linux-x64` (or `SpeedView-linux-x64.tar.gz`)
+Download the latest standalone binary or archive from the [**GitHub Releases**](https://github.com/zikani/speedview/releases) page:
+- **Windows**: `SpeedView-windows-x64.zip` (or `SpeedView-windows-x64.exe`)
+- **macOS**: `SpeedView-macos.zip` (`SpeedView.app`)
+- **Linux**: `SpeedView-linux-x64.zip` (or `SpeedView-linux-x64` / `.tar.gz`)
 
 Verify integrity using the accompanying `.sha256` file if desired.
 
@@ -115,11 +117,12 @@ SpeedView includes an automated GitHub Actions release pipeline in [`.github/wor
 ### How Tag Releases Work
 Whenever you push a semantic version tag matching `v*` (for example `v1.0.1`), GitHub Actions automatically:
 
-1. **Verifies Code & Tests** on both `ubuntu-latest` (under `xvfb-run`) and `windows-latest` (`python -m unittest discover -s tests -v`).
-2. **Packages Standalone Binaries** via PyInstaller (`--onefile --windowed --collect-submodules speedview`):
-   - Windows: `SpeedView-windows-x64.exe` + `SpeedView-windows-x64.exe.sha256`
-   - Linux: `SpeedView-linux-x64`, `SpeedView-linux-x64.tar.gz` + `SpeedView-linux-x64.sha256`
-3. **Publishes a GitHub Release** automatically with generated release notes and attaches all binaries and SHA-256 checksums.
+1. **Verifies Code & Tests** on `ubuntu-latest` (under `xvfb-run`), `windows-latest`, and `macos-latest` (`QT_QPA_PLATFORM=offscreen`).
+2. **Packages Standalone Releases** via PyInstaller (`--windowed --collect-submodules speedview`):
+   - Windows: `SpeedView-windows-x64.zip`, `SpeedView-windows-x64.exe` + `SpeedView-windows-x64.sha256`
+   - macOS: `SpeedView-macos.zip` (`SpeedView.app`) + `SpeedView-macos.zip.sha256`
+   - Linux: `SpeedView-linux-x64.zip`, `SpeedView-linux-x64`, `SpeedView-linux-x64.tar.gz` + `SpeedView-linux-x64.sha256`
+3. **Publishes a GitHub Release** automatically with generated release notes and attaches all `.zip` bundles, binaries, and SHA-256 checksums.
 
 ```bash
 # Bump APP_VERSION in speedview/config/config.py, commit, then push a tag:
@@ -163,6 +166,8 @@ Per-app traffic totals persist in `data_usage.db` in the same folder.
 | `start_minimized` | `false` | Launch directly hidden in the system tray |
 | `minimize_to_tray` | `true` | Keep system tray icon active for background monitoring |
 | `close_to_tray` | `true` | Keep background monitoring running when windows close |
+| `auto_update` | `true` | Background check + temp `.zip` stage & helper swap on new releases |
+| `last_update_check` | `0.0` | Unix timestamp of last GitHub Release check (3-day / `259200s` cooldown) |
 | `enable_notifications` | `true` | Enable desktop high-speed and test alerts |
 | `notification_threshold` | `50` | High-speed alert threshold (Mbps) |
 

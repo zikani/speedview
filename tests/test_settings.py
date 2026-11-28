@@ -253,6 +253,8 @@ class TestSettingsAndDetection(unittest.TestCase):
         dlg.close()
 
         mw.force_quit()
+        mw.deleteLater()
+        self._app.processEvents()
 
     def test_start_on_startup_registration(self):
         from types import SimpleNamespace
@@ -291,6 +293,149 @@ class TestSettingsAndDetection(unittest.TestCase):
                     os.environ.pop("XDG_CONFIG_HOME", None)
                 else:
                     os.environ["XDG_CONFIG_HOME"] = old_xdg
+
+    def test_auto_updater_cooldown_platform_selection_and_zip_replace(self):
+        import json
+        import shutil
+        import threading
+        import time
+        import zipfile
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from speedview.update.updater import UpdateChecker
+
+        settings = Settings()
+        # Within 3 days -> should skip API unless forced
+        settings.last_update_check = time.time() - 60
+        with patch.object(settings, "save"):
+            checker = UpdateChecker(settings=settings)
+            self.assertFalse(checker.should_check_for_updates(force=False))
+            self.assertTrue(checker.should_check_for_updates(force=True))
+
+            # Expired (>= 3 days) -> should allow check
+            settings.last_update_check = time.time() - (3 * 24 * 60 * 60 + 5)
+            self.assertTrue(checker.should_check_for_updates(force=False))
+
+            # Platform asset selection should prefer OS-matching .zip archives
+            assets = [
+                {"name": "SpeedView-windows-x64.exe", "browser_download_url": "https://example/win.exe"},
+                {"name": "SpeedView-windows-x64.zip", "browser_download_url": "https://example/win.zip"},
+                {"name": "SpeedView-macos.zip", "browser_download_url": "https://example/mac.zip"},
+                {"name": "SpeedView-linux-x64.tar.gz", "browser_download_url": "https://example/lin.tar.gz"},
+                {"name": "SpeedView-linux-x64.zip", "browser_download_url": "https://example/lin.zip"},
+            ]
+            self.assertEqual(checker._select_asset_for_platform(assets, "Windows")[1], "SpeedView-windows-x64.zip")
+            self.assertEqual(checker._select_asset_for_platform(assets, "Darwin")[1], "SpeedView-macos.zip")
+            self.assertEqual(checker._select_asset_for_platform(assets, "Linux")[1], "SpeedView-linux-x64.zip")
+
+            # Serve mock GitHub Release JSON + .zip payload over local HTTP
+            with tempfile.TemporaryDirectory() as workdir:
+                zip_bytes_path = os.path.join(workdir, "SpeedView-linux-x64.zip")
+                with zipfile.ZipFile(zip_bytes_path, "w") as zf:
+                    zf.writestr("SpeedView-linux-x64", b"NEW_BINARY_V99")
+                with open(zip_bytes_path, "rb") as f:
+                    zip_payload = f.read()
+
+                class ReleaseHandler(BaseHTTPRequestHandler):
+                    def do_GET(self):
+                        if self.path == "/release":
+                            body = json.dumps({
+                                "tag_name": "v9.9.9",
+                                "body": "Auto update test release",
+                                "html_url": "https://example/releases/v9.9.9",
+                                "assets": [
+                                    {
+                                        "name": "SpeedView-linux-x64.zip",
+                                        "browser_download_url": f"http://127.0.0.1:{port}/SpeedView-linux-x64.zip",
+                                    },
+                                    {
+                                        "name": "SpeedView-windows-x64.zip",
+                                        "browser_download_url": f"http://127.0.0.1:{port}/SpeedView-windows-x64.zip",
+                                    },
+                                    {
+                                        "name": "SpeedView-macos.zip",
+                                        "browser_download_url": f"http://127.0.0.1:{port}/SpeedView-macos.zip",
+                                    },
+                                ],
+                            }).encode("utf-8")
+                            self.send_response(200)
+                            self.send_header("Content-Type", "application/json")
+                            self.send_header("Content-Length", str(len(body)))
+                            self.end_headers()
+                            self.wfile.write(body)
+                        elif self.path.endswith(".zip"):
+                            self.send_response(200)
+                            self.send_header("Content-Length", str(len(zip_payload)))
+                            self.end_headers()
+                            self.wfile.write(zip_payload)
+                        else:
+                            self.send_response(404)
+                            self.end_headers()
+
+                    def log_message(self, format, *args):
+                        pass
+
+                server = ThreadingHTTPServer(("127.0.0.1", 0), ReleaseHandler)
+                port = server.server_address[1]
+                srv_thread = threading.Thread(target=server.serve_forever, daemon=True)
+                srv_thread.start()
+                try:
+                    settings.update_url = f"http://127.0.0.1:{port}/release"
+                    settings.last_update_check = 0.0
+                    up = UpdateChecker(settings=settings)
+                    self.assertTrue(up.check_for_updates(force=False))
+                    self.assertEqual(up.latest_version, "9.9.9")
+                    self.assertGreater(settings.last_update_check, 0.0)
+                    # Second immediate non-forced check must be skipped by 3-day limit
+                    self.assertFalse(up.check_for_updates(force=False))
+
+                    downloaded = up.download_update()
+                    self.assertIsNotNone(downloaded)
+                    self.assertTrue(os.path.exists(downloaded))
+
+                    target_bin = os.path.join(workdir, "SpeedView-linux-x64")
+                    with open(target_bin, "wb") as f:
+                        f.write(b"OLD_BINARY_V1")
+
+                    # Execute generated POSIX helper script when testing on POSIX (or validate .bat generation)
+                    if os.name == "posix":
+                        self.assertTrue(
+                            up.install_update(
+                                downloaded,
+                                target_path=target_bin,
+                                restart=False,
+                                launch_script=True,
+                                wait_pid=0,
+                            )
+                        )
+                        deadline = time.time() + 5.0
+                        replaced = False
+                        while time.time() < deadline:
+                            if os.path.exists(target_bin):
+                                with open(target_bin, "rb") as f:
+                                    if f.read() == b"NEW_BINARY_V99":
+                                        replaced = True
+                                        break
+                            time.sleep(0.05)
+                        self.assertTrue(replaced)
+                        if up.last_helper_process is not None:
+                            up.last_helper_process.wait(timeout=5)
+                        self.assertFalse(os.path.exists(up.staged_dir))
+                    else:
+                        self.assertTrue(
+                            up.install_update(
+                                downloaded,
+                                target_path=target_bin,
+                                restart=False,
+                                launch_script=False,
+                                wait_pid=0,
+                            )
+                        )
+                        self.assertTrue(os.path.exists(up.last_helper_script))
+                        os.remove(up.last_helper_script)
+                        shutil.rmtree(up.staged_dir, ignore_errors=True)
+                finally:
+                    server.shutdown()
+                    server.server_close()
 
 
 if __name__ == '__main__':

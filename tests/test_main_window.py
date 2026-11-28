@@ -57,6 +57,14 @@ class TestMainWindowButtons(unittest.TestCase):
         self.network_controller = DummyNetworkController()
         self.window = MainWindow(self.settings, self.speed_controller, self.network_controller)
         self.window.show()
+
+    def tearDown(self):
+        if getattr(self, "window", None) is not None:
+            self.window._force_quit = True
+            self.window._suppress_child_float = True
+            self.window.close()
+            self.window.deleteLater()
+
     def test_svg_buttons_exist(self):
         # Just ensure the SVG loads and widget is present
         self.assertIsNotNone(self.window.svg_widget)

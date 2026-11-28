@@ -16,6 +16,7 @@ from speedview.config.config import (
     DEFAULT_ENABLE_NOTIFICATIONS,
     DEFAULT_NOTIFICATION_THRESHOLD,
     DEFAULT_SPEED_UNIT,
+    DEFAULT_AUTO_UPDATE,
     DEFAULT_UPDATE_URL,
     CONFIG_FILE,
 )
@@ -70,7 +71,9 @@ class Settings:
         self.window_size = None
         self.window_position = None
 
-        # Update URL setting
+        # Update settings (3-day check throttling persisted across restarts)
+        self.auto_update = DEFAULT_AUTO_UPDATE
+        self.last_update_check = 0.0
         self.update_url = DEFAULT_UPDATE_URL
 
     def _get_default_interface(self):
@@ -151,6 +154,8 @@ class Settings:
                 'window_size': self._serialize_qt_geometry(self.window_size),
                 'window_position': self._serialize_qt_geometry(self.window_position),
                 'settings_version': self.settings_version,
+                'auto_update': bool(self.auto_update),
+                'last_update_check': float(self.last_update_check or 0.0),
                 'update_url': self.update_url,
             }
 

@@ -1,4 +1,5 @@
 from PyQt5.QtWidgets import (
+    QApplication,
     QDialog,
     QFormLayout,
     QLineEdit,
@@ -296,16 +297,16 @@ class SettingsDialog(QDialog):
         )
 
     def check_updates(self):
-        """Check for software updates."""
+        """Check for software updates immediately (bypassing the 3-day cooldown)."""
         try:
             self.updater = UpdateChecker(settings=self.settings)
-            has_update = self.updater.check_for_updates()
+            has_update = self.updater.check_for_updates(force=True)
 
             if has_update:
                 reply = QMessageBox.question(
                     self,
                     "Update Available",
-                    f"Version {self.updater.latest_version} is available. Open/install update now?",
+                    f"Version {self.updater.latest_version} is available. Download and install update now?",
                     QMessageBox.Yes | QMessageBox.No,
                 )
                 if reply == QMessageBox.Yes:
@@ -424,6 +425,12 @@ class SettingsDialog(QDialog):
         self.close_to_tray_checkbox.setToolTip("Keep running in background instead of quitting on window close")
         layout.addWidget(self.close_to_tray_checkbox)
 
+        self.auto_update_checkbox = QCheckBox("Automatically check & install updates in background (every 3 days)")
+        self.auto_update_checkbox.setToolTip(
+            "Check GitHub Releases every 3 days to avoid API rate limits and auto-apply updates"
+        )
+        layout.addWidget(self.auto_update_checkbox)
+
         group.setLayout(layout)
         self.layout.addWidget(group)
 
@@ -502,6 +509,7 @@ class SettingsDialog(QDialog):
         self.start_minimized_checkbox.setChecked(bool(self.settings.start_minimized))
         self.minimize_to_tray_checkbox.setChecked(bool(self.settings.minimize_to_tray))
         self.close_to_tray_checkbox.setChecked(bool(self.settings.close_to_tray))
+        self.auto_update_checkbox.setChecked(bool(getattr(self.settings, 'auto_update', True)))
         self.show_upload_speed_checkbox.setChecked(bool(self.settings.show_upload_speed))
         self.enable_notifications_checkbox.setChecked(bool(self.settings.enable_notifications))
         self.notification_threshold.setValue(int(self.settings.notification_threshold))
@@ -561,6 +569,7 @@ class SettingsDialog(QDialog):
         self.settings.start_minimized = self.start_minimized_checkbox.isChecked()
         self.settings.minimize_to_tray = self.minimize_to_tray_checkbox.isChecked()
         self.settings.close_to_tray = self.close_to_tray_checkbox.isChecked()
+        self.settings.auto_update = self.auto_update_checkbox.isChecked()
         self.settings.show_upload_speed = self.show_upload_speed_checkbox.isChecked()
         self.settings.enable_notifications = self.enable_notifications_checkbox.isChecked()
         self.settings.notification_threshold = self.notification_threshold.value()
@@ -590,12 +599,37 @@ class SettingsDialog(QDialog):
             )
 
     def start_update(self):
-        """Start the update process."""
-        if self.updater.check_for_updates():
-            update_file = self.updater.download_update()
-            if update_file:
-                self.updater.install_update(update_file)
+        """Download and apply the update package via temp staging + helper script."""
+        if not self.updater.update_available:
+            if not self.updater.check_for_updates(force=True):
+                QMessageBox.information(self, "No Updates", "You are already using the latest version.")
+                return
+
+        if not self.updater.download_url or self.updater.download_url == self.updater.release_page_url:
+            self.updater.open_release_page()
+            return
+
+        update_file = self.updater.download_update()
+        if not update_file:
+            QMessageBox.warning(self, "Update Failed", "Failed to download the update.")
+            return
+
+        if self.updater.can_self_replace():
+            if self.updater.install_update(update_file, restart=True):
+                self.accept()
+                parent = self.parent()
+                if parent is not None and hasattr(parent, 'force_quit'):
+                    parent.force_quit()
+                else:
+                    app = QApplication.instance()
+                    if app is not None:
+                        app.quit()
             else:
-                QMessageBox.warning(self, "Update Failed", "Failed to download the update.")
+                QMessageBox.warning(self, "Update Failed", "Failed to launch the updater helper script.")
         else:
-            QMessageBox.information(self, "No Updates", "You are already using the latest version.")
+            QMessageBox.information(
+                self,
+                "Update Downloaded",
+                f"Update downloaded and extracted to:\n{self.updater.staged_dir or update_file}\n\n"
+                "Automatic replace & restart is active in standalone frozen releases.",
+            )

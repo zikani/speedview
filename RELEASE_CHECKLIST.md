@@ -19,7 +19,7 @@
 
 ## 3. Error Handling
 - [x] App handles disconnected network / failed speed test gracefully without UI freezes
-- [x] Update check and non-Windows release fallback (`webbrowser.open`) handle errors gracefully
+- [x] Background GitHub Release updater enforces 3-day cooldown (`last_update_check`), downloads `.zip` to temp dir, and uses detached helper script to swap & restart cleanly
 - [x] Dialogs validate input without crashing
 
 ## 4. Persistence
@@ -33,5 +33,5 @@
 - [x] GitHub Actions CI workflow (`.github/workflows/ci.yml`) configured for Ubuntu and Windows
 
 ## 6. Packaging & Release
-- [x] Automated PyInstaller GitHub Action (`.github/workflows/release.yml`) configured for `ubuntu-latest` (`SpeedView-linux-x64` / `.tar.gz`) and `windows-latest` (`SpeedView-windows-x64.exe`) on `v*` tags
+- [x] Automated PyInstaller GitHub Action (`.github/workflows/release.yml`) configured for Windows (`SpeedView-windows-x64.zip`/`.exe`), macOS (`SpeedView-macos.zip`), and Linux (`SpeedView-linux-x64.zip`/`.tar.gz`/binary) on `v*` tags
 - [ ] Push version tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) to publish release binaries and verify live updater check

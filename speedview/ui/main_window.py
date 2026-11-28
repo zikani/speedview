@@ -1,5 +1,6 @@
 import sys
 import time
+import threading
 import logging
 from PyQt5.QtWidgets import (
     QWidget,
@@ -9,7 +10,7 @@ from PyQt5.QtWidgets import (
     QApplication,
 )
 from PyQt5.QtSvg import QSvgWidget
-from PyQt5.QtCore import Qt, QTimer, QPoint, QByteArray
+from PyQt5.QtCore import Qt, QTimer, QPoint, QByteArray, pyqtSignal
 from PyQt5.QtGui import QKeySequence, QMouseEvent
 
 from speedview.ui.resources.svg_templates import MAIN_SVG_TEMPLATE
@@ -29,10 +30,13 @@ from speedview.controllers.network_controller import NetworkController
 from speedview.controllers.speed_controller import SpeedController
 from speedview.models.settings import Settings
 from speedview.models.data_usage import DataUsageTracker
+from speedview.update.updater import UpdateChecker
 from .update_dialog import UpdateDialog
 
 
 class MainWindow(QWidget):
+    background_update_ready = pyqtSignal(str, str)
+
     def __init__(self, settings=None, speed_controller=None, network_controller=None, data_usage_tracker=None):
         super().__init__()
         self.settings = settings or Settings()
@@ -52,6 +56,8 @@ class MainWindow(QWidget):
         self._last_threshold_alert = 0.0
         self._force_quit = False
         self._suppress_child_float = False
+        self._checking_updates = False
+        self._pending_updater = None
 
         app = QApplication.instance()
         if app is not None:
@@ -67,6 +73,13 @@ class MainWindow(QWidget):
             self.connection_timer = QTimer(self)
             self.connection_timer.timeout.connect(self.network_controller.check_connection_status)
             self.connection_timer.start(3000)
+
+        self.background_update_ready.connect(self._on_background_update_ready)
+        self.update_timer = QTimer(self)
+        self.update_timer.timeout.connect(self.start_background_update_check)
+        # Poll timer every 6h; UpdateChecker enforces the 3-day GitHub API cooldown
+        self.update_timer.start(6 * 60 * 60 * 1000)
+        QTimer.singleShot(2500, self.start_background_update_check)
 
         self.update_display()
 
@@ -513,6 +526,8 @@ class MainWindow(QWidget):
         self._suppress_child_float = True
         if hasattr(self, 'connection_timer'):
             self.connection_timer.stop()
+        if hasattr(self, 'update_timer'):
+            self.update_timer.stop()
         if self.tray is not None and hasattr(self.tray, 'hide'):
             self.tray.hide()
         if self.floating_window:
@@ -523,9 +538,53 @@ class MainWindow(QWidget):
             self._test_dialog.close()
         event.accept()
 
+    def start_background_update_check(self, force=False):
+        """Check GitHub Releases in the background (throttled to every 3 days)."""
+        if self._force_quit or self._checking_updates:
+            return
+        if not force and not getattr(self.settings, 'auto_update', True):
+            return
+
+        probe = UpdateChecker(settings=self.settings)
+        if not probe.should_check_for_updates(force=force):
+            return
+
+        self._checking_updates = True
+
+        def _worker():
+            try:
+                updater = UpdateChecker(settings=self.settings)
+                if not updater.check_for_updates(force=force):
+                    return
+                if not updater.download_url or updater.download_url == updater.release_page_url:
+                    return
+                staged_path = updater.download_update()
+                if staged_path:
+                    self._pending_updater = updater
+                    self.background_update_ready.emit(str(updater.latest_version or ""), staged_path)
+            except Exception as exc:
+                logging.warning(f"Background update check failed: {exc}")
+            finally:
+                self._checking_updates = False
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_background_update_ready(self, latest_version, staged_path):
+        """Apply downloaded background update when running as a packaged binary."""
+        if self._force_quit:
+            return
+        if self.tray is not None and hasattr(self.tray, 'show_message'):
+            self.tray.show_message(
+                "SpeedView Update Ready",
+                f"Version {latest_version} downloaded in background.",
+            )
+        if self._pending_updater is not None and self._pending_updater.can_self_replace():
+            if self._pending_updater.install_update(staged_path, restart=True):
+                self.force_quit()
+
     def check_for_updates(self):
-        """Check for software updates"""
-        update_dialog = UpdateDialog(self, settings=self.settings)
+        """Check for software updates manually."""
+        update_dialog = UpdateDialog(self, settings=self.settings, force_check=True)
         update_dialog.exec_()
 
 

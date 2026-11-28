@@ -22,7 +22,9 @@ DEFAULT_SPEED_UNIT = "Mbps"  # Added default speed unit
 DEFAULT_SHOW_HELP = True
 DEFAULT_SHOW_ABOUT = True
 
-# Update URL for the update checker
+# Update settings (check once every 3 days to avoid API rate limits)
+DEFAULT_AUTO_UPDATE = True
+UPDATE_CHECK_INTERVAL_SECONDS = 3 * 24 * 60 * 60
 DEFAULT_UPDATE_URL = "https://api.github.com/repos/zikani/speedview/releases/latest"
 DEFAULT_RELEASES_PAGE_URL = "https://github.com/zikani/speedview/releases"
 

@@ -6,11 +6,11 @@ from speedview.app import NetworkSpeedMeter
 from speedview.ui.update_dialog import UpdateDialog
 
 
-def check_updates_on_startup(settings=None):
+def check_updates_on_startup(settings=None, force=False):
     from speedview.update.updater import UpdateChecker
     updater = UpdateChecker(settings=settings)
-    if updater.check_for_updates():
-        dialog = UpdateDialog(settings=settings)
+    if updater.check_for_updates(force=force):
+        dialog = UpdateDialog(settings=settings, force_check=False)
         dialog.exec_()
 
 
@@ -22,8 +22,7 @@ if __name__ == '__main__':
         app.setQuitOnLastWindowClosed(False)
 
         window = NetworkSpeedMeter()
-        logging.info('Checking for updates on startup')
-        check_updates_on_startup(settings=window.settings)
+        logging.info('Background auto-updater scheduled on a 3-day check interval')
 
         # Honor start_minimized and is_floating before showing the main window
         if not window.settings.start_minimized and not window.settings.is_floating:
