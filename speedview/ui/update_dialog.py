@@ -16,6 +16,7 @@ from ..update.updater import UpdateChecker
 
 class UpdateWorker(QThread):
     progress = pyqtSignal(float)
+    bytes_progress = pyqtSignal(int, int)
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
@@ -26,12 +27,13 @@ class UpdateWorker(QThread):
     def run(self):
         try:
             update_file = self.updater.download_update(
-                progress_callback=lambda p: self.progress.emit(p)
+                progress_callback=lambda p: self.progress.emit(p),
+                bytes_callback=lambda d, t: self.bytes_progress.emit(d, t),
             )
             if update_file:
                 self.finished.emit(update_file)
             else:
-                self.error.emit("Failed to download update")
+                self.error.emit("Failed to download update package from GitHub Releases.")
         except Exception as e:
             self.error.emit(str(e))
 
@@ -168,49 +170,72 @@ class UpdateDialog(QDialog):
             return
 
         self.update_button.setEnabled(False)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
         self.progress_bar.show()
         self.status_label.setText("Downloading update package to temporary folder...")
 
         self.worker = UpdateWorker(self.updater)
         self.worker.progress.connect(self.update_progress)
+        self.worker.bytes_progress.connect(self.update_bytes_progress)
         self.worker.finished.connect(self.install_update)
         self.worker.error.connect(self.show_error)
         self.worker.start()
 
     def update_progress(self, progress):
-        self.progress_bar.setValue(int(progress))
+        if progress < 0:
+            if self.progress_bar.maximum() != 0:
+                self.progress_bar.setRange(0, 0)
+        else:
+            if self.progress_bar.maximum() == 0:
+                self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(int(progress))
+
+    def update_bytes_progress(self, downloaded, total):
+        mb = downloaded / (1024 * 1024)
+        if total > 0:
+            total_mb = total / (1024 * 1024)
+            self.status_label.setText(
+                f"Downloading update package... {mb:.2f} / {total_mb:.2f} MB"
+            )
+        else:
+            self.status_label.setText(f"Downloading update package... {mb:.2f} MB")
+
+    def _find_force_quit_host(self):
+        widget = self.parent()
+        while widget is not None:
+            if hasattr(widget, 'force_quit'):
+                return widget
+            widget = widget.parent() if hasattr(widget, 'parent') else None
+        return None
 
     def install_update(self, update_file):
         reply = QMessageBox.question(
             self,
             'Install Update',
-            'The update package has been downloaded to a temporary folder.\n'
-            'Install now? SpeedView will close, update its files, and restart automatically.',
+            f'Update downloaded and extracted in:\n{self.updater.staged_dir or update_file}\n\n'
+            'Install now? SpeedView will close, replace its files, and restart automatically.',
             QMessageBox.Yes | QMessageBox.No,
         )
 
         if reply == QMessageBox.Yes:
-            if self.updater.can_self_replace():
-                if self.updater.install_update(update_file, restart=True):
-                    self.accept()
-                    parent = self.parent()
-                    if parent is not None and hasattr(parent, 'force_quit'):
-                        parent.force_quit()
-                    else:
-                        app = QApplication.instance()
-                        if app is not None:
-                            app.quit()
-                else:
-                    self.show_error("Failed to launch update helper script")
-            else:
-                QMessageBox.information(
-                    self,
-                    "Update Downloaded",
-                    f"Update archive downloaded and staged at:\n{self.updater.staged_dir or update_file}\n\n"
-                    "Self-replacement activates automatically in packaged standalone builds.",
-                )
+            if self.updater.install_update(update_file, restart=True):
                 self.accept()
+                host = self._find_force_quit_host()
+                if host is not None:
+                    host.force_quit()
+                else:
+                    app = QApplication.instance()
+                    if app is not None:
+                        app.quit()
+            else:
+                self.show_error("Failed to launch the updater helper script.")
+        else:
+            self.update_button.setEnabled(True)
+            self.status_label.setText("Update staged. Click Download & Install whenever ready.")
 
     def show_error(self, error_message):
+        self.progress_bar.hide()
+        self.update_button.setEnabled(True)
+        self.status_label.setText(f"Update error: {error_message}")
         QMessageBox.critical(self, "Update Error", error_message)
-        self.close()

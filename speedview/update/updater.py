@@ -136,13 +136,20 @@ class UpdateChecker:
             self.latest_version = str(data.get('tag_name', '')).lstrip('v').strip()
             self.release_notes = data.get('body') or 'No release notes available'
             self.release_page_url = data.get('html_url') or DEFAULT_RELEASES_PAGE_URL
+            self.source_zip_url = data.get('zipball_url')
 
             if self.latest_version and version.parse(self.latest_version) > version.parse(self.current_version):
                 self.update_available = True
                 asset_url, asset_name = self._select_asset_for_platform(data.get('assets', []))
-                if asset_url:
+                if not getattr(sys, 'frozen', False) and self.source_zip_url:
+                    self.download_url = self.source_zip_url
+                    self.asset_name = f"SpeedView-{self.latest_version}-source.zip"
+                elif asset_url:
                     self.download_url = asset_url
                     self.asset_name = asset_name
+                elif self.source_zip_url:
+                    self.download_url = self.source_zip_url
+                    self.asset_name = f"SpeedView-{self.latest_version}-source.zip"
                 else:
                     self.download_url = self.release_page_url
             return self.update_available
@@ -179,7 +186,7 @@ class UpdateChecker:
                             pass
         return extract_dir
 
-    def download_update(self, progress_callback=None):
+    def download_update(self, progress_callback=None, bytes_callback=None):
         """Download the GitHub Release asset (.zip or binary) to a temporary staging directory."""
         if not self.download_url or self.download_url == self.release_page_url:
             return None
@@ -200,8 +207,13 @@ class UpdateChecker:
                             continue
                         downloaded += len(chunk)
                         f.write(chunk)
-                        if progress_callback and total_size > 0:
-                            progress_callback(min(100.0, (downloaded / total_size) * 100.0))
+                        if bytes_callback:
+                            bytes_callback(downloaded, total_size)
+                        if progress_callback:
+                            if total_size > 0:
+                                progress_callback(min(100.0, (downloaded / total_size) * 100.0))
+                            else:
+                                progress_callback(-1.0)
 
             if progress_callback:
                 progress_callback(100.0)
@@ -240,30 +252,86 @@ class UpdateChecker:
                 return os.sep.join(parts[: i + 1]) or os.sep
         return norm
 
-    def can_self_replace(self, target_path=None):
-        """Return True if we have a safe frozen/explicit target to swap cleanly."""
-        if target_path:
+    @staticmethod
+    def _get_project_root():
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+    @staticmethod
+    def _contains_source_entrypoint(path):
+        if not path or not os.path.isdir(path):
+            return False
+        if os.path.isfile(os.path.join(path, "main.py")) and os.path.isdir(os.path.join(path, "speedview")):
             return True
-        return bool(getattr(sys, 'frozen', False))
+        entries = os.listdir(path)
+        if len(entries) == 1:
+            inner = os.path.join(path, entries[0])
+            return os.path.isfile(os.path.join(inner, "main.py")) and os.path.isdir(os.path.join(inner, "speedview"))
+        return False
+
+    def can_self_replace(self, target_path=None):
+        """Return True when a valid frozen executable, explicit target, or source checkout can be updated."""
+        if target_path or getattr(sys, 'frozen', False):
+            return True
+        return os.path.isfile(os.path.join(self._get_project_root(), "main.py"))
+
+    @staticmethod
+    def _resolve_python_executable():
+        """Return a Python interpreter executable suitable for launching the updater subprocess."""
+        if not getattr(sys, 'frozen', False) and sys.executable:
+            return sys.executable
+        return shutil.which("python3") or shutil.which("python")
 
     def install_update(self, update_file, target_path=None, restart=True, launch_script=True, wait_pid=None):
         """
-        Launch a detached helper script that waits for the running process to exit,
-        replaces the old executable/bundle files from the temp staging directory,
-        removes temporary update files, and restarts the updated app.
+        Spawn a detached Python helper subprocess (or shell fallback if frozen without system Python)
+        that waits for the running process to exit, replaces the old executable/bundle/source files
+        from the temp staging directory, cleans up temp files, and restarts the updated app.
         """
         try:
             if not update_file or not os.path.exists(update_file):
                 raise FileNotFoundError(f"Update artifact not found: {update_file}")
 
             if not self.can_self_replace(target_path):
-                # Do not destructively overwrite a live Python interpreter when running from source
                 return False
 
             payload_path, staged_root, _ = self._resolve_payload(update_file)
-            resolved_target = target_path or sys.executable
+            is_source_run = not target_path and not getattr(sys, 'frozen', False)
+            if target_path:
+                resolved_target = target_path
+            elif getattr(sys, 'frozen', False):
+                resolved_target = sys.executable
+            else:
+                resolved_target = self._get_project_root()
+
             pid_to_wait = os.getpid() if wait_pid is None else int(wait_pid)
+            python_exe = self._resolve_python_executable()
             system = platform.system()
+
+            if python_exe:
+                script_path = self._create_python_updater_script(
+                    payload_path=payload_path,
+                    staged_root=staged_root,
+                    target_path=resolved_target,
+                    pid=pid_to_wait,
+                    restart=restart,
+                    source_run=is_source_run,
+                )
+                self.last_helper_script = script_path
+                if launch_script:
+                    kwargs = {"close_fds": True}
+                    if system == "Windows":
+                        kwargs["creationflags"] = (
+                            getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                            | getattr(subprocess, "DETACHED_PROCESS", 0)
+                            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                        )
+                    else:
+                        kwargs["start_new_session"] = True
+                        kwargs["stdin"] = subprocess.DEVNULL
+                        kwargs["stdout"] = subprocess.DEVNULL
+                        kwargs["stderr"] = subprocess.DEVNULL
+                    self.last_helper_process = subprocess.Popen([python_exe, script_path], **kwargs)
+                return True
 
             if system == "Windows":
                 script_path = self._create_windows_updater_script(
@@ -272,6 +340,7 @@ class UpdateChecker:
                     target_path=resolved_target,
                     pid=pid_to_wait,
                     restart=restart,
+                    source_run=is_source_run,
                 )
                 self.last_helper_script = script_path
                 if launch_script:
@@ -293,6 +362,7 @@ class UpdateChecker:
                 target_path=resolved_target,
                 pid=pid_to_wait,
                 restart=restart,
+                source_run=is_source_run,
             )
             self.last_helper_script = script_path
             if launch_script:
@@ -309,9 +379,124 @@ class UpdateChecker:
             print(f"Installation failed: {e}")
             return False
 
+    def _create_python_updater_script(
+        self, payload_path, staged_root, target_path, pid, restart=True, source_run=False
+    ):
+        """Create a cross-platform Python helper script to wait for PID, swap files, clean temp dir, and restart."""
+        target_bundle = self._find_app_bundle_or_binary(target_path)
+        target_abs = os.path.abspath(target_bundle)
+        target_name = os.path.basename(target_abs)
+        src_entry = self._pick_source_entry(payload_path, target_name)
+
+        is_app_bundle = False
+        if (target_abs.endswith('.app') and src_entry.endswith('.app')) or (
+            os.path.isdir(src_entry) and src_entry.endswith('.app')
+        ):
+            is_app_bundle = True
+            dest_path = target_abs if target_abs.endswith('.app') else os.path.join(target_abs, os.path.basename(src_entry))
+            relaunch_args = ["open", "-n", dest_path] if restart else []
+        elif os.path.isdir(src_entry):
+            dest_path = target_abs if os.path.isdir(target_abs) else os.path.dirname(target_abs)
+            if not restart:
+                relaunch_args = []
+            elif source_run and os.path.isfile(os.path.join(src_entry, "main.py")):
+                relaunch_args = [sys.executable, os.path.join(dest_path, "main.py")]
+            else:
+                relaunch_target = target_abs if os.path.isfile(target_abs) else os.path.join(dest_path, target_name)
+                relaunch_args = [relaunch_target]
+        else:
+            dest_path = (
+                os.path.join(target_abs, os.path.basename(src_entry))
+                if os.path.isdir(target_abs)
+                else target_abs
+            )
+            relaunch_args = [dest_path] if restart else []
+
+        script_lines = [
+            "import os",
+            "import shutil",
+            "import stat",
+            "import subprocess",
+            "import time",
+            "",
+            f"PID = {int(pid)}",
+            f"SRC_ENTRY = {repr(os.path.abspath(src_entry))}",
+            f"DEST_PATH = {repr(dest_path)}",
+            f"STAGED_ROOT = {repr(os.path.abspath(staged_root))}",
+            f"RELAUNCH_ARGS = {repr(relaunch_args)}",
+            f"IS_APP_BUNDLE = {repr(is_app_bundle)}",
+            "IS_WINDOWS = os.name == 'nt'",
+            "",
+            "def wait_for_exit(pid):",
+            "    if pid <= 0:",
+            "        return",
+            "    for _ in range(100):",
+            "        try:",
+            "            if IS_WINDOWS:",
+            "                import ctypes",
+            "                h = ctypes.windll.kernel32.OpenProcess(0x00100000, False, pid)",
+            "                if not h:",
+            "                    break",
+            "                res = ctypes.windll.kernel32.WaitForSingleObject(h, 200)",
+            "                ctypes.windll.kernel32.CloseHandle(h)",
+            "                if res == 0:",
+            "                    break",
+            "            else:",
+            "                os.kill(pid, 0)",
+            "                time.sleep(0.2)",
+            "        except OSError:",
+            "            break",
+            "        except Exception:",
+            "            break",
+            "",
+            "wait_for_exit(PID)",
+            "",
+            "try:",
+            "    if IS_APP_BUNDLE and os.path.isdir(SRC_ENTRY):",
+            "        if os.path.exists(DEST_PATH):",
+            "            shutil.rmtree(DEST_PATH, ignore_errors=True)",
+            "        shutil.copytree(SRC_ENTRY, DEST_PATH, dirs_exist_ok=True)",
+            "    elif os.path.isdir(SRC_ENTRY):",
+            "        os.makedirs(DEST_PATH, exist_ok=True)",
+            "        shutil.copytree(SRC_ENTRY, DEST_PATH, dirs_exist_ok=True)",
+            "    else:",
+            "        os.makedirs(os.path.dirname(DEST_PATH), exist_ok=True)",
+            "        shutil.copy2(SRC_ENTRY, DEST_PATH)",
+            "        if not IS_WINDOWS:",
+            "            os.chmod(DEST_PATH, os.stat(DEST_PATH).st_mode | stat.S_IXUSR)",
+            "finally:",
+            "    if STAGED_ROOT and os.path.exists(STAGED_ROOT):",
+            "        shutil.rmtree(STAGED_ROOT, ignore_errors=True)",
+            "",
+            "if RELAUNCH_ARGS:",
+            "    kwargs = {'close_fds': True}",
+            "    if IS_WINDOWS:",
+            "        kwargs['creationflags'] = (",
+            "            getattr(subprocess, 'DETACHED_PROCESS', 0)",
+            "            | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)",
+            "        )",
+            "    else:",
+            "        kwargs['start_new_session'] = True",
+            "        kwargs['stdin'] = subprocess.DEVNULL",
+            "        kwargs['stdout'] = subprocess.DEVNULL",
+            "        kwargs['stderr'] = subprocess.DEVNULL",
+            "    subprocess.Popen(RELAUNCH_ARGS, **kwargs)",
+            "",
+            "try:",
+            "    os.remove(__file__)",
+            "except OSError:",
+            "    pass",
+            "",
+        ]
+
+        fd, script_path = tempfile.mkstemp(prefix="speedview_updater_", suffix=".py")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("\n".join(script_lines))
+        return script_path
+
     @staticmethod
     def _pick_source_entry(payload_path, target_basename):
-        """Pick the matching file or .app inside an extracted payload folder."""
+        """Pick the matching file, .app, or unwrapped repo root inside an extracted payload folder."""
         if os.path.isfile(payload_path):
             return payload_path
         entries = os.listdir(payload_path)
@@ -325,7 +510,9 @@ class UpdateChecker:
             return os.path.join(payload_path, entries[0])
         return payload_path
 
-    def _create_windows_updater_script(self, payload_path, staged_root, target_path, pid, restart=True):
+    def _create_windows_updater_script(
+        self, payload_path, staged_root, target_path, pid, restart=True, source_run=False
+    ):
         target_abs = os.path.abspath(target_path)
         target_dir = target_abs if os.path.isdir(target_abs) else os.path.dirname(target_abs)
         target_name = os.path.basename(target_abs)
@@ -333,13 +520,17 @@ class UpdateChecker:
 
         if os.path.isdir(src_entry):
             replace_block = f'xcopy "{src_entry}\\*" "{target_dir}\\" /E /Y /I /Q > nul'
-            restart_exe = os.path.join(target_dir, target_name) if not os.path.isdir(target_abs) else src_entry
+            if source_run and os.path.isfile(os.path.join(src_entry, "main.py")):
+                restart_cmd = f'start "" "{sys.executable}" "{os.path.join(target_dir, "main.py")}"'
+            else:
+                restart_exe = os.path.join(target_dir, target_name) if not os.path.isdir(target_abs) else src_entry
+                restart_cmd = f'start "" "{restart_exe}"'
         else:
             dest_file = target_abs if not os.path.isdir(target_abs) else os.path.join(target_dir, os.path.basename(src_entry))
             replace_block = f'copy /Y "{src_entry}" "{dest_file}" > nul'
-            restart_exe = dest_file
+            restart_cmd = f'start "" "{dest_file}"'
 
-        restart_block = f'start "" "{restart_exe}"' if restart else ''
+        restart_block = restart_cmd if restart else ''
         cleanup_staged = f'if exist "{staged_root}" rmdir /S /Q "{staged_root}"'
 
         wait_block = ""
@@ -370,7 +561,9 @@ class UpdateChecker:
             f.write(script_content)
         return script_path
 
-    def _create_posix_updater_script(self, payload_path, staged_root, target_path, pid, restart=True):
+    def _create_posix_updater_script(
+        self, payload_path, staged_root, target_path, pid, restart=True, source_run=False
+    ):
         target_bundle = self._find_app_bundle_or_binary(target_path)
         target_name = os.path.basename(target_bundle)
         src_entry = self._pick_source_entry(payload_path, target_name)
@@ -384,11 +577,18 @@ class UpdateChecker:
                 f"cp -Rf {q(src_entry)} {q(target_bundle)}"
             )
             relaunch_cmd = f"open -n {q(target_bundle)}" if restart else ""
+        elif os.path.isdir(src_entry) and src_entry.endswith('.app'):
+            dest_app = target_bundle if target_bundle.endswith('.app') else os.path.join(target_bundle, os.path.basename(src_entry))
+            replace_cmd = f"rm -rf {q(dest_app)} && cp -Rf {q(src_entry)} {q(dest_app)}"
+            relaunch_cmd = f"open -n {q(dest_app)}" if restart else ""
         elif os.path.isdir(src_entry):
             target_dir = target_bundle if os.path.isdir(target_bundle) else os.path.dirname(target_bundle)
             replace_cmd = f"mkdir -p {q(target_dir)} && cp -Rf {q(src_entry)}/. {q(target_dir)}/"
-            relaunch_target = target_bundle if os.path.isfile(target_bundle) else os.path.join(target_dir, target_name)
-            relaunch_cmd = f"nohup {q(relaunch_target)} >/dev/null 2>&1 &" if restart else ""
+            if source_run and os.path.isfile(os.path.join(src_entry, "main.py")):
+                relaunch_cmd = f"nohup {q(sys.executable)} {q(os.path.join(target_dir, 'main.py'))} >/dev/null 2>&1 &" if restart else ""
+            else:
+                relaunch_target = target_bundle if os.path.isfile(target_bundle) else os.path.join(target_dir, target_name)
+                relaunch_cmd = f"nohup {q(relaunch_target)} >/dev/null 2>&1 &" if restart else ""
         else:
             dest_file = (
                 os.path.join(target_bundle, os.path.basename(src_entry))

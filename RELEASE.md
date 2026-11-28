@@ -54,13 +54,10 @@ When a newer version exists, `_select_asset_for_platform()` prefers the matching
 - `download_update()` streams the archive into a unique temporary staging folder created via `tempfile.mkdtemp(prefix="speedview_update_")`.
 - `.zip` archives are extracted into `<staged_dir>/extracted/` using `_safe_extract_zip()`, which validates resolved paths against the extraction root (preventing ZipSlip path traversal) and restores POSIX file permission bits (`chmod`).
 
-### 4. Detached Helper Script Self-Replacement
-Once a packaged binary downloads and stages an update:
-- **Frozen Detection**: `can_self_replace()` returns `True` only when running as a packaged executable (`sys.frozen == True`) or when an explicit `target_path` is supplied. When running from source (`python main.py`), auto-replacement is skipped so your system Python interpreter is never overwritten.
-- **Process Exit + File Swap**:
-  - **Windows (`.bat`)**: Runs detached (`CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`), polls `tasklist` until the SpeedView PID exits, copies/overwrites `SpeedView.exe` (`copy /Y` or `xcopy`), cleans up the staging directory (`rmdir /S /Q`), starts the new executable (`start ""`), and deletes itself (`del "%~f0"`).
-  - **macOS (`.sh`)**: Runs in a new session (`start_new_session=True`), waits via `kill -0 "$PID"`, replaces the full `SpeedView.app` bundle (`rm -rf` + `cp -Rf`), removes the staging directory, relaunches via `open -n`, and deletes itself.
-  - **Linux (`.sh`)**: Runs in a new session, waits via `kill -0 "$PID"`, replaces the executable (`cp -f` + `chmod +x`), removes the staging directory, relaunches via `nohup ... >/dev/null 2>&1 &`, and deletes itself.
+### 4. Detached Python Subprocess Self-Replacement
+Once an update archive finishes downloading and extracting in the temporary folder:
+- **Packaged & Source Support**: `can_self_replace()` returns `True` for packaged binaries (`SpeedView.exe`, `SpeedView.app`, `SpeedView-linux-x64`) using OS binary `.zip` assets as well as local source checkouts (`python main.py`) using GitHub's `zipball_url` source archive (or binary asset fallback).
+- **Python Subprocess Helper (`speedview_updater_*.py`)**: Spawns a detached Python subprocess (`subprocess.Popen([sys.executable, helper_script])`) that waits for the parent PID to exit (`os.kill` on macOS/Linux, Win32 `WaitForSingleObject` on Windows), copies/replaces the target binary, `.app` bundle, or source directory cleanly via `shutil`, deletes the temporary staging folder, relaunches the updated app, and removes itself. (If a standalone frozen build runs on a host with no system Python installed, `install_update()` automatically falls back to a detached `.bat` / `/bin/sh` helper.)
 
 ### 5. Configuration Controls
 Users can configure update behavior in **Settings → Behavior & System Tray** or directly in `network_speed_meter.conf`:

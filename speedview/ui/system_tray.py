@@ -13,7 +13,7 @@ class SystemTray:
     def setup_tray(self):
         """Create the system tray icon and menu."""
         self.tray_icon = QSystemTrayIcon(self.main_window)
-        tray_menu = QMenu()
+        self.tray_menu = QMenu(self.main_window)
 
         actions = [
             ("Show", self.show_window),
@@ -27,11 +27,11 @@ class SystemTray:
         for text, callback in actions:
             action = QAction(text, self.main_window)
             action.triggered.connect(callback)
-            tray_menu.addAction(action)
+            self.tray_menu.addAction(action)
             if text == "Test Network":
-                tray_menu.addSeparator()
+                self.tray_menu.addSeparator()
 
-        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.setContextMenu(self.tray_menu)
         self.update_tray_icon(0)
         self.tray_icon.show()
         self.tray_icon.activated.connect(self.tray_icon_activated)

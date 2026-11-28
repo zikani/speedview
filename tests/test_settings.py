@@ -29,6 +29,13 @@ class TestSettingsAndDetection(unittest.TestCase):
     def setUpClass(cls):
         cls._app = QApplication.instance() or QApplication(sys.argv)
 
+    @classmethod
+    def tearDownClass(cls):
+        import gc
+        gc.collect()
+        if cls._app is not None:
+            cls._app.processEvents()
+
     def test_default_interface_skips_loopback(self):
         settings = Settings()
         self.assertNotEqual(settings.selected_interface, "lo")
@@ -40,6 +47,7 @@ class TestSettingsAndDetection(unittest.TestCase):
             selected_data = dialog.network_interface_combo.currentData()
             self.assertEqual(selected_data, settings.selected_interface)
         dialog.close()
+        dialog.deleteLater()
 
     def test_real_interface_detection_returns_structured_data(self):
         nc = NetworkController()
@@ -106,6 +114,7 @@ class TestSettingsAndDetection(unittest.TestCase):
             dlg.show()
             self.assertTrue(dlg.isVisible())
             dlg.close()
+            dlg.deleteLater()
 
     def test_restore_defaults_resets_values(self):
         settings = Settings()
@@ -253,11 +262,13 @@ class TestSettingsAndDetection(unittest.TestCase):
         self.assertIn("#0B1220", dlg.styleSheet())
         self.assertTrue(hasattr(dlg, "start_on_startup_checkbox"))
         dlg.close()
+        dlg.deleteLater()
 
         mw._force_quit = True
         mw._suppress_child_float = True
         mw.close()
         mw.deleteLater()
+        self._app.processEvents()
 
     def test_start_on_startup_registration(self):
         from types import SimpleNamespace
@@ -399,43 +410,22 @@ class TestSettingsAndDetection(unittest.TestCase):
                     with open(target_bin, "wb") as f:
                         f.write(b"OLD_BINARY_V1")
 
-                    # Execute generated POSIX helper script when testing on POSIX (or validate .bat generation)
-                    if os.name == "posix":
-                        self.assertTrue(
-                            up.install_update(
-                                downloaded,
-                                target_path=target_bin,
-                                restart=False,
-                                launch_script=True,
-                                wait_pid=0,
-                            )
+                    self.assertTrue(
+                        up.install_update(
+                            downloaded,
+                            target_path=target_bin,
+                            restart=False,
+                            launch_script=True,
+                            wait_pid=0,
                         )
-                        deadline = time.time() + 5.0
-                        replaced = False
-                        while time.time() < deadline:
-                            if os.path.exists(target_bin):
-                                with open(target_bin, "rb") as f:
-                                    if f.read() == b"NEW_BINARY_V99":
-                                        replaced = True
-                                        break
-                            time.sleep(0.05)
-                        self.assertTrue(replaced)
-                        if up.last_helper_process is not None:
-                            up.last_helper_process.wait(timeout=5)
-                        self.assertFalse(os.path.exists(up.staged_dir))
-                    else:
-                        self.assertTrue(
-                            up.install_update(
-                                downloaded,
-                                target_path=target_bin,
-                                restart=False,
-                                launch_script=False,
-                                wait_pid=0,
-                            )
-                        )
-                        self.assertTrue(os.path.exists(up.last_helper_script))
-                        os.remove(up.last_helper_script)
-                        shutil.rmtree(up.staged_dir, ignore_errors=True)
+                    )
+                    self.assertTrue(str(up.last_helper_script).endswith(".py"))
+                    if up.last_helper_process is not None:
+                        up.last_helper_process.wait(timeout=5)
+                    self.assertTrue(os.path.exists(target_bin))
+                    with open(target_bin, "rb") as f:
+                        self.assertEqual(f.read(), b"NEW_BINARY_V99")
+                    self.assertFalse(os.path.exists(up.staged_dir))
                 finally:
                     server.shutdown()
                     server.server_close()
@@ -455,6 +445,7 @@ class TestSettingsAndDetection(unittest.TestCase):
         for entry in CURRENT_CHANGELOG:
             self.assertIn(entry, changelog_txt)
         about.close()
+        about.deleteLater()
 
         upd = UpdateDialog(settings=settings, force_check=True, auto_check=False)
         upd.updater.latest_version = "2.5.0"
@@ -470,6 +461,100 @@ class TestSettingsAndDetection(unittest.TestCase):
         self.assertIn("Polished Float widget", upd.changelog_view.toPlainText())
         self.assertTrue(upd.update_button.isVisible())
         upd.close()
+        upd.deleteLater()
+        self._app.processEvents()
+
+    def test_real_source_zipball_download_and_worker(self):
+        import json
+        import threading
+        import zipfile
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from speedview.ui.update_dialog import UpdateWorker
+        from speedview.update.updater import UpdateChecker
+
+        with tempfile.TemporaryDirectory() as workdir:
+            zipball_path = os.path.join(workdir, "src.zip")
+            with zipfile.ZipFile(zipball_path, "w") as zf:
+                zf.writestr("zikani-speedview-deadbeef/main.py", b"print('v9.9.9')\n")
+                zf.writestr("zikani-speedview-deadbeef/speedview/__init__.py", b"__version__ = '9.9.9'\n")
+            with open(zipball_path, "rb") as f:
+                zip_payload = f.read()
+
+            class ZipballHandler(BaseHTTPRequestHandler):
+                def do_GET(self):
+                    if self.path == "/release":
+                        body = json.dumps({
+                            "tag_name": "v9.9.9",
+                            "body": "Real download test",
+                            "html_url": "https://example/releases/v9.9.9",
+                            "zipball_url": f"http://127.0.0.1:{port}/zipball",
+                            "assets": [],
+                        }).encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        self.wfile.write(body)
+                    elif self.path == "/zipball":
+                        self.send_response(200)
+                        # Omit Content-Length to exercise chunked progress fallback too
+                        self.end_headers()
+                        self.wfile.write(zip_payload)
+                    else:
+                        self.send_response(404)
+                        self.end_headers()
+
+                def log_message(self, format, *args):
+                    pass
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), ZipballHandler)
+            port = server.server_address[1]
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                settings = Settings()
+                settings.update_url = f"http://127.0.0.1:{port}/release"
+                settings.last_update_check = 0.0
+                with patch.object(settings, "save"):
+                    checker = UpdateChecker(settings=settings)
+                    self.assertTrue(checker.check_for_updates(force=True))
+                    self.assertTrue(checker.can_self_replace())
+
+                    worker = UpdateWorker(checker)
+                    progress_seen = []
+                    bytes_seen = []
+                    done_files = []
+                    worker.progress.connect(progress_seen.append)
+                    worker.bytes_progress.connect(lambda d, t: bytes_seen.append((d, t)))
+                    worker.finished.connect(done_files.append)
+                    worker.run()
+
+                    self.assertEqual(len(done_files), 1)
+                    self.assertTrue(os.path.exists(done_files[0]))
+                    self.assertIn(-1.0, progress_seen)
+                    self.assertIn(100.0, progress_seen)
+                    self.assertGreater(bytes_seen[-1][0], 0)
+
+                    target_dir = os.path.join(workdir, "app_root")
+                    os.makedirs(target_dir, exist_ok=True)
+                    self.assertTrue(
+                        checker.install_update(
+                            done_files[0],
+                            target_path=target_dir,
+                            restart=False,
+                            launch_script=True,
+                            wait_pid=0,
+                        )
+                    )
+                    self.assertTrue(str(checker.last_helper_script).endswith(".py"))
+                    if checker.last_helper_process is not None:
+                        checker.last_helper_process.wait(timeout=5)
+                    self.assertTrue(os.path.isfile(os.path.join(target_dir, "main.py")))
+                    with open(os.path.join(target_dir, "main.py"), "rb") as f:
+                        self.assertIn(b"v9.9.9", f.read())
+                    self.assertFalse(os.path.exists(checker.staged_dir))
+            finally:
+                server.shutdown()
+                server.server_close()
 
 
 if __name__ == '__main__':

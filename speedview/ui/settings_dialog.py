@@ -580,37 +580,6 @@ class SettingsDialog(QDialog):
             )
 
     def start_update(self):
-        """Download and apply the update package via temp staging + helper script."""
-        if not self.updater.update_available:
-            if not self.updater.check_for_updates(force=True):
-                QMessageBox.information(self, "No Updates", "You are already using the latest version.")
-                return
-
-        if not self.updater.download_url or self.updater.download_url == self.updater.release_page_url:
-            self.updater.open_release_page()
-            return
-
-        update_file = self.updater.download_update()
-        if not update_file:
-            QMessageBox.warning(self, "Update Failed", "Failed to download the update.")
-            return
-
-        if self.updater.can_self_replace():
-            if self.updater.install_update(update_file, restart=True):
-                self.accept()
-                parent = self.parent()
-                if parent is not None and hasattr(parent, 'force_quit'):
-                    parent.force_quit()
-                else:
-                    app = QApplication.instance()
-                    if app is not None:
-                        app.quit()
-            else:
-                QMessageBox.warning(self, "Update Failed", "Failed to launch the updater helper script.")
-        else:
-            QMessageBox.information(
-                self,
-                "Update Downloaded",
-                f"Update downloaded and extracted to:\n{self.updater.staged_dir or update_file}\n\n"
-                "Automatic replace & restart is active in standalone frozen releases.",
-            )
+        """Open UpdateDialog to download, extract, and install the update."""
+        dialog = UpdateDialog(parent=self, settings=self.settings, force_check=True)
+        dialog.exec_()
