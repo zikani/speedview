@@ -86,7 +86,7 @@ sudo apt-get update && sudo apt-get install -y --no-install-recommends \
 
 ### 1. Run Prebuilt Release Binaries (Recommended for End Users)
 Download the latest standalone binary or archive from the [**GitHub Releases**](https://github.com/zikani/speedview/releases) page:
-- **Windows**: `SpeedView-windows-x64.zip` (or `SpeedView-windows-x64.exe`)
+- **Windows**: `SpeedView.exe` or `SpeedView-windows-x64.zip`
 - **macOS**: `SpeedView-macos.zip` (`SpeedView.app`)
 - **Linux**: `SpeedView-linux-x64.zip` (or `SpeedView-linux-x64` / `.tar.gz`)
 
@@ -118,8 +118,8 @@ SpeedView includes an automated GitHub Actions release pipeline in [`.github/wor
 Whenever you push a semantic version tag matching `v*` (for example `v1.0.1`), GitHub Actions automatically:
 
 1. **Verifies Code & Tests** on `ubuntu-latest` (under `xvfb-run`), `windows-latest`, and `macos-latest` (`QT_QPA_PLATFORM=offscreen`).
-2. **Packages Standalone Releases** via PyInstaller (`--windowed --collect-submodules speedview`):
-   - Windows: `SpeedView-windows-x64.zip`, `SpeedView-windows-x64.exe` + `SpeedView-windows-x64.sha256`
+2. **Packages Standalone Releases** via [`speedview.spec`](speedview.spec) (`--windowed --collect-submodules speedview`):
+   - Windows: `SpeedView.exe`, `SpeedView-windows-x64.zip` + `SpeedView-windows-x64.sha256`
    - macOS: `SpeedView-macos.zip` (`SpeedView.app`) + `SpeedView-macos.zip.sha256`
    - Linux: `SpeedView-linux-x64.zip`, `SpeedView-linux-x64`, `SpeedView-linux-x64.tar.gz` + `SpeedView-linux-x64.sha256`
 3. **Publishes a GitHub Release** automatically with generated release notes and attaches all `.zip` bundles, binaries, and SHA-256 checksums.
@@ -132,17 +132,32 @@ git push origin v1.0.1
 
 You can also trigger a dry-run build manually from the GitHub **Actions → SpeedView Release Build → Run workflow** button (`workflow_dispatch`) without creating a release.
 
-### Local PyInstaller Build
-To package a standalone executable locally:
+### Build `SpeedView.exe` Locally on Windows
+
+PyInstaller builds native Windows PE executables when executed on Windows (it does not cross-compile `.exe` binaries from Linux/macOS):
+
+```bat
+:: Option 1: Double-click or run the automated Windows build script (outputs dist\SpeedView.exe + .zip + .sha256)
+scripts\build_windows.bat
+```
+
+```powershell
+# Option 2: PowerShell script
+.\scripts\build_windows.ps1
+
+# Option 3: Direct PyInstaller build via speedview.spec
+pip install -r requirements.txt
+pyinstaller --noconfirm --clean speedview.spec
+```
+
+The standalone `dist\SpeedView.exe` and `dist\SpeedView-windows-x64.zip` are written to `dist\`.
+
+### Local PyInstaller Build (Linux / macOS)
+To package a standalone executable locally on Linux or macOS using [`speedview.spec`](speedview.spec):
 
 ```bash
 pip install -r requirements.txt
-pyinstaller --noconfirm --clean --onefile --windowed \
-  --name SpeedView \
-  --collect-submodules speedview \
-  --hidden-import PyQt5.QtSvg \
-  --hidden-import PyQt5.QtXml \
-  main.py
+pyinstaller --noconfirm --clean speedview.spec
 ```
 
 ---

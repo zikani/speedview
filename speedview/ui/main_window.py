@@ -528,6 +528,11 @@ class MainWindow(QWidget):
             self.connection_timer.stop()
         if hasattr(self, 'update_timer'):
             self.update_timer.stop()
+        try:
+            if hasattr(self.speed_controller, 'timer') and hasattr(self.speed_controller.timer, 'stop'):
+                self.speed_controller.timer.stop()
+        except RuntimeError:
+            pass
         if self.tray is not None and hasattr(self.tray, 'hide'):
             self.tray.hide()
         if self.floating_window:

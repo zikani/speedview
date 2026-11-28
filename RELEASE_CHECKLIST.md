@@ -33,5 +33,6 @@
 - [x] GitHub Actions CI workflow (`.github/workflows/ci.yml`) configured for Ubuntu and Windows
 
 ## 6. Packaging & Release
-- [x] Automated PyInstaller GitHub Action (`.github/workflows/release.yml`) configured for Windows (`SpeedView-windows-x64.zip`/`.exe`), macOS (`SpeedView-macos.zip`), and Linux (`SpeedView-linux-x64.zip`/`.tar.gz`/binary) on `v*` tags
+- [x] Shared `speedview.spec` + Windows build scripts (`scripts/build_windows.bat`, `scripts/build_windows.ps1`) package standalone `dist\SpeedView.exe` and `dist\SpeedView-windows-x64.zip`
+- [x] Automated PyInstaller GitHub Action (`.github/workflows/release.yml`) configured for Windows (`SpeedView.exe` / `SpeedView-windows-x64.zip`), macOS (`SpeedView-macos.zip`), and Linux (`SpeedView-linux-x64.zip`/`.tar.gz`/binary) on `v*` tags
 - [ ] Push version tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) to publish release binaries and verify live updater check

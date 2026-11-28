@@ -107,26 +107,15 @@ jobs:
           python -m compileall -q main.py speedview tests
           python -m unittest discover -s tests -v
 
-      - name: Build standalone Windows .exe & .zip with PyInstaller
+      - name: Build standalone Windows SpeedView.exe & .zip with PyInstaller
         shell: pwsh
         run: |
-          pyinstaller `
-            --noconfirm `
-            --clean `
-            --onefile `
-            --windowed `
-            --name SpeedView-windows-x64 `
-            --collect-submodules speedview `
-            --hidden-import PyQt5.QtSvg `
-            --hidden-import PyQt5.QtXml `
-            --hidden-import win32com.client `
-            --hidden-import winshell `
-            main.py
-          Compress-Archive -Path dist\SpeedView-windows-x64.exe -DestinationPath dist\SpeedView-windows-x64.zip -Force
-          $exeHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-windows-x64.exe).Hash.ToLower()
+          pyinstaller --noconfirm --clean speedview.spec
+          Compress-Archive -Path dist\SpeedView.exe -DestinationPath dist\SpeedView-windows-x64.zip -Force
+          $exeHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView.exe).Hash.ToLower()
           $zipHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-windows-x64.zip).Hash.ToLower()
           @(
-            "$exeHash  SpeedView-windows-x64.exe"
+            "$exeHash  SpeedView.exe"
             "$zipHash  SpeedView-windows-x64.zip"
           ) | Out-File -Encoding ascii dist\SpeedView-windows-x64.sha256
 
@@ -135,7 +124,7 @@ jobs:
         with:
           name: speedview-windows-x64
           path: |
-            dist/SpeedView-windows-x64.exe
+            dist/SpeedView.exe
             dist/SpeedView-windows-x64.zip
             dist/SpeedView-windows-x64.sha256
 
@@ -166,15 +155,7 @@ jobs:
 
       - name: Build standalone macOS .app.zip with PyInstaller
         run: |
-          pyinstaller \
-            --noconfirm \
-            --clean \
-            --windowed \
-            --name SpeedView \
-            --collect-submodules speedview \
-            --hidden-import PyQt5.QtSvg \
-            --hidden-import PyQt5.QtXml \
-            main.py
+          pyinstaller --noconfirm --clean speedview.spec
           ditto -c -k --keepParent dist/SpeedView.app dist/SpeedView-macos.zip
           (cd dist && shasum -a 256 SpeedView-macos.zip > SpeedView-macos.zip.sha256)
 
@@ -208,7 +189,7 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            release-assets/SpeedView-windows-x64.exe
+            release-assets/SpeedView.exe
             release-assets/SpeedView-windows-x64.zip
             release-assets/SpeedView-windows-x64.sha256
             release-assets/SpeedView-linux-x64

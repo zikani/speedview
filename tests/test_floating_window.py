@@ -11,34 +11,28 @@ class DummySignal:
         # Accept connections but do nothing
         self._slot = slot
 
-class DummySpeedController(SpeedController):
+class DummySpeedController:
     def __init__(self):
-        # Do not call super().__init__ to avoid timer setup
         self.last_download_speed = 42.0
         self.last_upload_speed = 24.0
         self.speed_updated = DummySignal()
     def get_current_speeds(self):
         return (self.last_download_speed, self.last_upload_speed)
 
-class DummyNetworkController(NetworkController):
+class DummyNetworkController:
     def __init__(self):
         self._signal_strength = 3
         self._connection_type = "WiFi"
         self._band = "5GHz"
         self.connection_updated = DummySignal()
-        # Add any other signals/attributes your UI expects
     @property
     def signal_strength(self):
         return self._signal_strength
     @signal_strength.setter
     def signal_strength(self, value):
         self._signal_strength = value
-    @property
-    def signal_strength(self):
-        return self._signal_strength
     def get_connection_info(self):
         return (self._connection_type, self._band)
-    # Methods to simulate network changes
     def set_network(self, signal_strength, connection_type, band):
         self._signal_strength = signal_strength
         self._connection_type = connection_type

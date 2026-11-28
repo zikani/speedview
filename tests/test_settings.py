@@ -207,6 +207,8 @@ class TestSettingsAndDetection(unittest.TestCase):
         settings.is_floating = False
 
         mw = MainWindow(settings=settings)
+        if mw.tray is not None and hasattr(mw.tray, "hide"):
+            mw.tray.hide()
         mw.tray = DummyTray()
         mw.show()
 
@@ -252,9 +254,10 @@ class TestSettingsAndDetection(unittest.TestCase):
         self.assertTrue(hasattr(dlg, "start_on_startup_checkbox"))
         dlg.close()
 
-        mw.force_quit()
+        mw._force_quit = True
+        mw._suppress_child_float = True
+        mw.close()
         mw.deleteLater()
-        self._app.processEvents()
 
     def test_start_on_startup_registration(self):
         from types import SimpleNamespace

@@ -11,7 +11,7 @@ class DummySignal:
         # Accept connections but do nothing
         self._slot = slot
 
-class DummySpeedController(SpeedController):
+class DummySpeedController:
     def __init__(self):
         self.last_download_speed = 10.0
         self.last_upload_speed = 5.0
@@ -45,12 +45,20 @@ class DummySystemTray:
         pass
 
 import speedview.ui.main_window
-speedview.ui.main_window.SystemTray = DummySystemTray
+from unittest.mock import patch
+
 
 class TestMainWindowButtons(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls._app = QApplication.instance() or QApplication(sys.argv)
+        cls._tray_patch = patch.object(speedview.ui.main_window, "SystemTray", DummySystemTray)
+        cls._tray_patch.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tray_patch.stop()
+
     def setUp(self):
         self.settings = Settings()
         self.speed_controller = DummySpeedController()
@@ -64,6 +72,7 @@ class TestMainWindowButtons(unittest.TestCase):
             self.window._suppress_child_float = True
             self.window.close()
             self.window.deleteLater()
+            self.window = None
 
     def test_svg_buttons_exist(self):
         # Just ensure the SVG loads and widget is present
