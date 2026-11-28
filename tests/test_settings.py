@@ -772,18 +772,7 @@ class TestSettingsAndDetection(unittest.TestCase):
             wiz.deleteLater()
             self._app.processEvents()
 
-    def test_packaging_icns_and_wix_v4_manifest(self):
-        import importlib.util
-        import xml.etree.ElementTree as ET
-
-        gen_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "installer", "windows", "generate_files_wxs.py")
-        )
-        spec = importlib.util.spec_from_file_location("generate_files_wxs", gen_path)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        generate_app_files_wxs = mod.generate_app_files_wxs
-
+    def test_packaging_icns_and_inno_setup_script(self):
         icns_path = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "..", "speedview", "ui", "resources", "speedview.icns")
         )
@@ -791,35 +780,34 @@ class TestSettingsAndDetection(unittest.TestCase):
         with open(icns_path, "rb") as f:
             self.assertEqual(f.read(4), b"icns")
 
-        # Validate SpeedView.wxs has no WiX v5-only <Files> element
-        speedview_wxs = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "installer", "windows", "SpeedView.wxs")
-        )
-        main_tree = ET.parse(speedview_wxs)
-        self.assertIsNone(main_tree.getroot().find(".//{http://wixtoolset.org/schemas/v4/wxs}Files"))
+        # Ensure WiX artifacts were completely removed
+        win_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "installer", "windows"))
+        self.assertFalse(os.path.exists(os.path.join(win_dir, "SpeedView.wxs")))
+        self.assertFalse(os.path.exists(os.path.join(win_dir, "generate_files_wxs.py")))
 
-        # Validate generated AppFiles.wxs contains nested dirs and SpeedView.exe component
-        with tempfile.TemporaryDirectory() as tmpdir:
-            dist_dir = os.path.join(tmpdir, "dist", "SpeedView")
-            os.makedirs(os.path.join(dist_dir, "_internal", "sub"), exist_ok=True)
-            with open(os.path.join(dist_dir, "SpeedView.exe"), "wb") as f:
-                f.write(b"EXE")
-            with open(os.path.join(dist_dir, "_internal", "sub", "qt.dll"), "wb") as f:
-                f.write(b"DLL")
+        iss_path = os.path.join(win_dir, "speedview.iss")
+        self.assertTrue(os.path.isfile(iss_path))
+        with open(iss_path, "r", encoding="utf-8") as f:
+            iss_content = f.read()
 
-            out_wxs = os.path.join(tmpdir, "AppFiles.wxs")
-            generate_app_files_wxs(dist_dir, out_wxs)
-            tree = ET.parse(out_wxs)
-            root = tree.getroot()
-            ns = {"w": "http://wixtoolset.org/schemas/v4/wxs"}
-            comps = root.findall(".//w:Component", ns)
-            files = root.findall(".//w:File", ns)
-            dirs = root.findall(".//w:Directory", ns)
-            self.assertEqual(len(comps), 2)
-            self.assertEqual(len(files), 2)
-            self.assertTrue(any(f.attrib.get("Id") == "SpeedViewExeFile" for f in files))
-            self.assertTrue(any(d.attrib.get("Name") == "_internal" for d in dirs))
-            self.assertTrue(any(d.attrib.get("Name") == "sub" for d in dirs))
+        for expected in (
+            "[Setup]",
+            "[Files]",
+            "[Icons]",
+            "[Tasks]",
+            "[Registry]",
+            "[Run]",
+            "DefaultDirName={autopf}\\SpeedView",
+            "OutputBaseFilename=SpeedView-Installer-x64",
+            "SetupIconFile=..\\..\\speedview\\ui\\resources\\speedview.ico",
+            "UninstallDisplayIcon={app}\\speedview.ico",
+            "Source: \"..\\..\\dist\\SpeedView\\*\"",
+            "Source: \"..\\..\\speedview\\ui\\resources\\speedview.ico\"",
+            "{autodesktop}\\SpeedView",
+            "Subkey: \"Software\\SpeedView\"",
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        ):
+            self.assertIn(expected, iss_content)
 
 
 if __name__ == '__main__':

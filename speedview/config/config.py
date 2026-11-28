@@ -17,7 +17,7 @@ APP_FEATURES = [
 ]
 
 CURRENT_CHANGELOG = [
-    "Added Program Files onedir packaging, GUI MSI/Wizard Installer & Uninstaller, main app icon, and Desktop shortcut creation",
+    "Added Program Files onedir packaging, Inno Setup Windows Installer/Uninstaller & PyQt5 Setup Wizard, main app icon, and Desktop shortcut creation",
     "Added 3-day GitHub Releases background auto-updater with temp .zip staging and Python subprocess swap-and-restart",
     "Updated About and Updater widgets to display all released version changelogs and features",
     "Added real-time TCP Ping / Latency indicator (#pingBadge) next to the speed gauge",
@@ -33,7 +33,7 @@ RELEASE_HISTORY = [
         "features": [
             "Real-time Ping / Latency badge next to the main speedometer gauge",
             "Transparent compact corner Float widget (136x40) with live signal bars and speed",
-            "Bundled app icon (ICO/PNG/SVG), Desktop shortcut creator, and GUI Installer/Uninstaller + MSI support",
+            "Bundled app icon (ICO/PNG/SVG/ICNS), Desktop shortcut creator, Inno Setup Installer & GUI Setup/Uninstaller wizard",
             "3-day rate-limited GitHub Releases background auto-updater with Python subprocess file replacement & restart",
         ],
         "changes": list(CURRENT_CHANGELOG),

@@ -1,6 +1,6 @@
 # SpeedView Release & Auto-Updater Guide
 
-This document explains how SpeedView packages cross-platform installers (`Program Files\SpeedView` `onedir` layout + GUI `.msi` / `SpeedView-Setup.exe`) and how the built-in background auto-updater downloads, stages, swaps, and restarts updates across Windows, macOS, and Linux.
+This document explains how SpeedView packages cross-platform installers (`Program Files\SpeedView` `onedir` layout + Inno Setup `SpeedView-Installer-x64.exe` / `SpeedView-Setup.exe`) and how the built-in background auto-updater downloads, stages, swaps, and restarts updates across Windows, macOS, and Linux.
 
 ---
 
@@ -10,7 +10,7 @@ Because an active desktop application cannot reliably overwrite its own open bin
 
 ### Why Extracted `Program Files\SpeedView` (`onedir`) Replaces Standalone `.exe`
 - **No manual download-and-delete step**: Replacing `C:\Program Files\SpeedView\` (both `SpeedView.exe` and `_internal\`) updates the existing installation cleanly in place.
-- **MSI + GUI Installer/Uninstaller**: Users install once with `SpeedView-windows-x64.msi` or `SpeedView-Setup.exe`, get Desktop and Start Menu shortcuts plus `SpeedView.ico` file/taskbar icons, and uninstall cleanly from Windows **Apps & Features**.
+- **Inno Setup + GUI Installer/Uninstaller**: Users install once with `SpeedView-Installer-x64.exe` or `SpeedView-Setup.exe`, get Desktop and Start Menu shortcuts plus `SpeedView.ico` file/taskbar icons, and uninstall cleanly from Windows **Apps & Features**.
 
 ### End-to-End Update Flow
 
@@ -48,7 +48,7 @@ Main App Exits (force_quit)
 ### 2. Platform-Matched Release Asset Selection
 | Operating System | Primary `.zip` Asset | Installer / Fallback Assets |
 | :--- | :--- | :--- |
-| **Windows** (`Windows`) | `*win*.zip` (`SpeedView-windows-x64.zip` `onedir`) | `SpeedView-windows-x64.msi`, `SpeedView-Setup.exe` |
+| **Windows** (`Windows`) | `*win*.zip` (`SpeedView-windows-x64.zip` `onedir`) | `SpeedView-Installer-x64.exe`, `SpeedView-Setup.exe` |
 | **macOS** (`Darwin`) | `*mac*` / `*darwin*` / `*osx*.zip` (`SpeedView-macos.zip`) | `.tar.gz`, `.dmg` |
 | **Linux** (`Linux`) | `*linux*.zip` (`SpeedView-linux-x64.zip` `onedir`) | `.tar.gz`, `SpeedView-linux-x64-Setup` |
 
@@ -72,7 +72,7 @@ Main App Exits (force_quit)
    git push origin v1.0.1
    ```
 4. GitHub Actions (`.github/workflows/release.yml`) builds and publishes:
-   - **Windows**: `SpeedView-windows-x64.msi` (WiX GUI MSI), `SpeedView-Setup.exe` (PyQt5 Setup Wizard), `SpeedView-windows-x64.zip` (`onedir`), `SpeedView-windows-x64.sha256`
+   - **Windows**: `SpeedView-Installer-x64.exe` (Inno Setup 6 GUI Installer), `SpeedView-Setup.exe` (PyQt5 Setup Wizard), `SpeedView-windows-x64.zip` (`onedir`), `SpeedView-windows-x64.sha256`
    - **macOS**: `SpeedView-macos.zip`, `SpeedView-macos.zip.sha256`
    - **Linux**: `SpeedView-linux-x64.zip`, `SpeedView-linux-x64.tar.gz`, `SpeedView-linux-x64-Setup`, `SpeedView-linux-x64.sha256`
 

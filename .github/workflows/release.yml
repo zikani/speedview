@@ -79,7 +79,7 @@ jobs:
             dist/SpeedView-linux-x64.sha256
 
   build-windows:
-    name: Build Windows App, GUI Setup & MSI (PyInstaller + WiX)
+    name: Build Windows App, GUI Setup & Inno Setup Installer (PyInstaller + Inno Setup)
     runs-on: windows-latest
     steps:
       - name: Check out repository
@@ -96,32 +96,55 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install WiX Toolset v4 for GUI MSI builds
+      - name: Install Inno Setup Compiler
+        shell: pwsh
         run: |
-          dotnet tool install --global wix --version 4.0.5
-          wix extension add -g WixToolset.UI.wixext/4.0.5
+          $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+          if (-not $iscc) {
+            $candidates = @(
+              "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+              "C:\Program Files\Inno Setup 6\ISCC.exe",
+              "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+            )
+            $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            $iscc = @(
+              "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+              "C:\Program Files\Inno Setup 6\ISCC.exe"
+            ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $iscc) {
+            throw "Inno Setup compiler ISCC.exe could not be located."
+          }
+          echo "ISCC_EXE=$iscc" >> $env:GITHUB_ENV
 
       - name: Verify bytecode & run unit tests
         run: |
           python -m compileall -q main.py installer.py speedview tests
           python -m unittest discover -s tests -v
 
-      - name: Build onedir SpeedView, GUI Setup.exe, MSI, & .zip
+      - name: Build onedir SpeedView, GUI Setup.exe, Inno Setup Installer & .zip
         shell: pwsh
         run: |
           pyinstaller --noconfirm --clean speedview.spec
           pyinstaller --noconfirm --clean speedview_installer.spec
+
           $AppVersion = (python -c "from speedview.config.config import APP_VERSION; print(APP_VERSION)").Trim()
-          python installer\windows\generate_files_wxs.py --dist-dir dist\SpeedView --output installer\windows\AppFiles.wxs
-          wix build installer\windows\SpeedView.wxs installer\windows\AppFiles.wxs -ext WixToolset.UI.wixext -d "AppVersion=$AppVersion" -arch x64 -o dist\SpeedView-windows-x64.msi
+          & "$env:ISCC_EXE" "/DAppVersion=$AppVersion" installer\windows\speedview.iss
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup compilation failed with exit code $LASTEXITCODE"
+          }
+
           Compress-Archive -Path dist\SpeedView\* -DestinationPath dist\SpeedView-windows-x64.zip -Force
           $zipHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-windows-x64.zip).Hash.ToLower()
           $setupHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-Setup.exe).Hash.ToLower()
-          $msiHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-windows-x64.msi).Hash.ToLower()
+          $innoHash = (Get-FileHash -Algorithm SHA256 dist\SpeedView-Installer-x64.exe).Hash.ToLower()
           @(
             "$zipHash  SpeedView-windows-x64.zip"
             "$setupHash  SpeedView-Setup.exe"
-            "$msiHash  SpeedView-windows-x64.msi"
+            "$innoHash  SpeedView-Installer-x64.exe"
           ) | Out-File -Encoding ascii dist\SpeedView-windows-x64.sha256
 
       - name: Upload Windows release artifacts
@@ -129,8 +152,8 @@ jobs:
         with:
           name: speedview-windows-x64
           path: |
+            dist/SpeedView-Installer-x64.exe
             dist/SpeedView-Setup.exe
-            dist/SpeedView-windows-x64.msi
             dist/SpeedView-windows-x64.zip
             dist/SpeedView-windows-x64.sha256
 
@@ -195,8 +218,8 @@ jobs:
           draft: false
           prerelease: false
           files: |
+            release-assets/SpeedView-Installer-x64.exe
             release-assets/SpeedView-Setup.exe
-            release-assets/SpeedView-windows-x64.msi
             release-assets/SpeedView-windows-x64.zip
             release-assets/SpeedView-windows-x64.sha256
             release-assets/SpeedView-linux-x64.tar.gz

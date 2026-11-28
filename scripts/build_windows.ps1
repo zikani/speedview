@@ -34,16 +34,26 @@ try {
     $ZipPath = Join-Path $RootDir "dist\SpeedView-windows-x64.zip"
     Compress-Archive -Path "$OnedirPath\*" -DestinationPath $ZipPath -Force
 
-    $MsiPath = Join-Path $RootDir "dist\SpeedView-windows-x64.msi"
-    if (Get-Command wix -ErrorAction SilentlyContinue) {
-        Write-Host "==> Building WiX GUI MSI dist\SpeedView-windows-x64.msi..." -ForegroundColor Cyan
+    $InnoPath = Join-Path $RootDir "dist\SpeedView-Installer-x64.exe"
+    $Iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+    if (-not $Iscc) {
+        $IsccCandidates = @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe",
+            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+        )
+        $Iscc = $IsccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    }
+
+    if ($Iscc) {
+        Write-Host "==> Building Inno Setup installer dist\SpeedView-Installer-x64.exe..." -ForegroundColor Cyan
         $AppVersion = (& $PythonExe -c "from speedview.config.config import APP_VERSION; print(APP_VERSION)").Trim()
-        $AppFilesWxs = Join-Path $RootDir "installer\windows\AppFiles.wxs"
-        & $PythonExe installer\windows\generate_files_wxs.py --dist-dir $OnedirPath --output $AppFilesWxs
-        wix extension add -g WixToolset.UI.wixext 2>$null | Out-Null
-        wix build installer\windows\SpeedView.wxs $AppFilesWxs -ext WixToolset.UI.wixext -d "AppVersion=$AppVersion" -arch x64 -o $MsiPath
+        & $Iscc "/DAppVersion=$AppVersion" installer\windows\speedview.iss
+        if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup compiler failed with exit code $LASTEXITCODE"
+        }
     } else {
-        Write-Host "NOTE: WiX Toolset ('wix') not found on PATH; skipping .msi build (GUI .exe Setup + .zip still built)." -ForegroundColor Yellow
+        Write-Host "NOTE: Inno Setup 6 (ISCC.exe) not found; skipping SpeedView-Installer-x64.exe (GUI SpeedView-Setup.exe + .zip still built)." -ForegroundColor Yellow
     }
 
     $HashLines = @(
@@ -53,21 +63,21 @@ try {
     if (Test-Path $SetupExePath) {
         $HashLines += "$((Get-FileHash -Algorithm SHA256 $SetupExePath).Hash.ToLower())  SpeedView-Setup.exe"
     }
-    if (Test-Path $MsiPath) {
-        $HashLines += "$((Get-FileHash -Algorithm SHA256 $MsiPath).Hash.ToLower())  SpeedView-windows-x64.msi"
+    if (Test-Path $InnoPath) {
+        $HashLines += "$((Get-FileHash -Algorithm SHA256 $InnoPath).Hash.ToLower())  SpeedView-Installer-x64.exe"
     }
 
     $ShaPath = Join-Path $RootDir "dist\SpeedView-windows-x64.sha256"
     $HashLines | Out-File -Encoding ascii $ShaPath
 
     Write-Host "`nBuild succeeded:" -ForegroundColor Green
-    Write-Host "  Onedir App : $OnedirPath"
-    Write-Host "  GUI Setup  : $SetupExePath"
-    Write-Host "  Archive    : $ZipPath"
-    if (Test-Path $MsiPath) {
-        Write-Host "  MSI Package: $MsiPath"
+    Write-Host "  Onedir App      : $OnedirPath"
+    Write-Host "  GUI Setup       : $SetupExePath"
+    Write-Host "  Archive         : $ZipPath"
+    if (Test-Path $InnoPath) {
+        Write-Host "  Inno Installer  : $InnoPath"
     }
-    Write-Host "  Checksums  : $ShaPath"
+    Write-Host "  Checksums       : $ShaPath"
 }
 finally {
     Pop-Location

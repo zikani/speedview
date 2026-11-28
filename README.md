@@ -39,7 +39,7 @@
 | **SQLite Data Usage (`App \| Data \| Date`)** | Per-process socket traffic attribution persisted in `data_usage.db`, presented in a frameless SVG window with `DAILY` / `MONTHLY` breakdowns and `RESET`. |
 | **Modern Settings & Shortcuts** | High-contrast dark-navy Settings dialog with interface selector (`Auto-select` or manual), **Start SpeedView automatically on system startup**, one-click **Create Desktop Shortcut**, units (`Mbps`, `MB/s`, `Kbps`), alerts, and update controls. |
 | **Background GitHub Auto-Updater** | Checks GitHub Releases **once every 3 days**, aggregates **all released version changelogs & features**, downloads OS-matching `onedir` `.zip` updates into a temp folder, and launches a detached Python helper (with UAC elevation on protected `Program Files` paths) to replace files cleanly and restart. |
-| **GUI Installer / Uninstaller & MSI** | Installs SpeedView cleanly to `C:\Program Files\SpeedView` (`onedir` layout) via WiX `.msi` (`SpeedView-windows-x64.msi`) or the PyQt5 `SpeedView-Setup` wizard with bundled app icons (`speedview.ico`/`speedview.png`), Start Menu, Desktop shortcut, and Apps & Features uninstaller. |
+| **GUI Installer / Uninstaller (Inno Setup)** | Installs SpeedView cleanly to `C:\Program Files\SpeedView` (`onedir` layout) via Inno Setup (`SpeedView-Installer-x64.exe`) or the PyQt5 `SpeedView-Setup` wizard with bundled app icons (`speedview.ico`/`speedview.png`/`speedview.icns`), Start Menu, Desktop shortcut, and Apps & Features uninstaller. |
 | **System Tray Background Daemon** | Keeps tracking speed and app data usage continuously in the background with a dynamic speed badge icon, synced tooltip, quick menu actions, and threshold alerts. |
 
 ---
@@ -87,8 +87,8 @@ sudo apt-get update && sudo apt-get install -y --no-install-recommends \
 
 ### 1. Run Installer or Prebuilt Release Packages (Recommended for End Users)
 Download the latest installer or extracted bundle from the [**GitHub Releases**](https://github.com/zikani/speedview/releases) page:
-- **Windows (MSI Installer)**: `SpeedView-windows-x64.msi` — installs to `C:\Program Files\SpeedView` with Desktop & Start Menu shortcuts and clean Windows Apps & Features uninstallation
-- **Windows (GUI Setup / Uninstaller)**: `SpeedView-Setup.exe` — PyQt5 Install / Upgrade / Uninstall wizard (`--uninstall` supported)
+- **Windows (Inno Setup Installer)**: `SpeedView-Installer-x64.exe` — installs to `C:\Program Files\SpeedView` with Desktop & Start Menu shortcuts and clean Windows Apps & Features uninstallation
+- **Windows (PyQt5 Setup Wizard)**: `SpeedView-Setup.exe` — custom GUI Install / Upgrade / Uninstall wizard (`--uninstall` supported)
 - **Windows (Portable `onedir` ZIP)**: `SpeedView-windows-x64.zip` (`SpeedView.exe` + `_internal/`)
 - **macOS**: `SpeedView-macos.zip` (`SpeedView.app`)
 - **Linux**: `SpeedView-linux-x64.zip` / `.tar.gz` / `SpeedView-linux-x64-Setup`
@@ -121,8 +121,8 @@ SpeedView includes an automated GitHub Actions release pipeline in [`.github/wor
 Whenever you push a semantic version tag matching `v*` (for example `v1.0.1`), GitHub Actions automatically:
 
 1. **Verifies Code & Tests** on `ubuntu-latest` (under `xvfb-run`), `windows-latest`, and `macos-latest` (`QT_QPA_PLATFORM=offscreen`).
-2. **Packages `onedir` App Bundles, GUI Setup & MSI** via [`speedview.spec`](speedview.spec), [`speedview_installer.spec`](speedview_installer.spec), and [`installer/windows/SpeedView.wxs`](installer/windows/SpeedView.wxs):
-   - Windows: `SpeedView-windows-x64.msi`, `SpeedView-Setup.exe`, `SpeedView-windows-x64.zip` + `SpeedView-windows-x64.sha256`
+2. **Packages `onedir` App Bundles, PyQt5 Setup & Inno Setup Installer** via [`speedview.spec`](speedview.spec), [`speedview_installer.spec`](speedview_installer.spec), and [`installer/windows/speedview.iss`](installer/windows/speedview.iss):
+   - Windows: `SpeedView-Installer-x64.exe`, `SpeedView-Setup.exe`, `SpeedView-windows-x64.zip` + `SpeedView-windows-x64.sha256`
    - macOS: `SpeedView-macos.zip` (`SpeedView.app`) + `SpeedView-macos.zip.sha256`
    - Linux: `SpeedView-linux-x64.zip`, `SpeedView-linux-x64.tar.gz`, `SpeedView-linux-x64-Setup` + `SpeedView-linux-x64.sha256`
 3. **Publishes a GitHub Release** automatically with generated release notes and attaches all installers, `.zip` bundles, and SHA-256 checksums.
@@ -135,13 +135,13 @@ git push origin v1.0.1
 
 You can also trigger a dry-run build manually from the GitHub **Actions → SpeedView Release Build → Run workflow** button (`workflow_dispatch`) without creating a release.
 
-### Build Windows `onedir`, GUI Setup `.exe`, and `.msi` Locally
+### Build Windows `onedir`, PyQt5 Setup, and Inno Setup Installer Locally
 
-PyInstaller builds native Windows PE executables and WiX v4 builds `.msi` packages when run on Windows (Linux/macOS cannot cross-compile native Windows `.exe`/`.msi` binaries):
+PyInstaller builds native Windows PE executables and Inno Setup 6 (`ISCC.exe`) compiles `SpeedView-Installer-x64.exe` when run on Windows (Linux/macOS cannot cross-compile native Windows installers):
 
 ```bat
 :: Option 1: Double-click or run the automated Windows build script
-:: Outputs dist\SpeedView\SpeedView.exe, dist\SpeedView-Setup.exe, dist\SpeedView-windows-x64.msi (if WiX installed), & .zip
+:: Outputs dist\SpeedView\SpeedView.exe, dist\SpeedView-Setup.exe, dist\SpeedView-Installer-x64.exe (if Inno Setup 6 installed), & .zip
 scripts\build_windows.bat
 ```
 

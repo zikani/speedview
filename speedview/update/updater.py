@@ -305,7 +305,6 @@ class UpdateChecker:
             priorities = [
                 lambda n: n.endswith('.zip') and ('win' in n or 'windows' in n),
                 lambda n: n.endswith('.zip') and not any(k in n for k in ('linux', 'mac', 'darwin', 'osx')),
-                lambda n: n.endswith('.msi'),
                 lambda n: n.endswith('.exe'),
             ]
         elif system == "darwin":

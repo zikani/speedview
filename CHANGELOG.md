@@ -9,12 +9,12 @@ All notable releases, features, and improvements for SpeedView.
 - Real-time Ping / Latency badge (`#pingBadge`) next to the main speedometer gauge
 - Transparent compact corner Float widget (`136x40`) displaying live signal bars and speed
 - High-contrast dark Settings UI with OS `Start on Startup` and one-click `Create Desktop Shortcut`
-- Bundled application icon (`speedview.ico` / `speedview.png`) and GUI Installer/Uninstaller + MSI support (`Program Files\SpeedView`)
+- Bundled application icon (`speedview.ico` / `speedview.png` / `speedview.icns`) and Inno Setup + PyQt5 GUI Installer/Uninstaller (`Program Files\SpeedView`)
 - 3-day rate-limited GitHub Releases background auto-updater with Python subprocess extraction, replacement, and restart
 
 ### Changelog
 - Switched Windows/Linux builds to `onedir` layout for clean `Program Files\SpeedView` installs and seamless `.zip` updates
-- Added WiX GUI `.msi` definition (`installer/windows/SpeedView.wxs`) and PyQt5 GUI Installer/Uninstaller wizard with Desktop & Start Menu shortcuts
+- Added Inno Setup 6 script (`installer/windows/speedview.iss`) and PyQt5 GUI Installer/Uninstaller wizard with Desktop & Start Menu shortcuts
 - Updated About and Updater widgets to display all released version changelogs & features automatically
 - Implemented unified close-to-Float and minimize-to-tray background daemon lifecycle
 
